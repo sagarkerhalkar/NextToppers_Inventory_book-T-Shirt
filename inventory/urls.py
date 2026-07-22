@@ -1,5 +1,6 @@
 from django.urls import path
-from . import views
+
+from . import import_views, report_views, views
 
 app_name = "inventory"
 
@@ -23,10 +24,19 @@ urlpatterns = [
     path("tshirts/allocations/", views.tshirt_allocation_list, name="tshirt_allocation_list"),
     path("tshirts/allocations/<int:pk>/approve/", views.paid_tshirt_approve, name="paid_tshirt_approve"),
     path("tshirts/allocations/<int:pk>/reject/", views.paid_tshirt_reject, name="paid_tshirt_reject"),
+    path("imports/", import_views.bulk_import, name="bulk_import"),
+    path("imports/templates/<str:import_type>/", import_views.download_import_template, name="download_import_template"),
     path("settings/branding/", views.branding_settings, name="branding"),
     path("reports/", views.reports_index, name="reports"),
     path("backups/download/", views.download_database_backup, name="download_database_backup"),
     path("reports/books.xlsx", views.export_books_excel, name="export_books_excel"),
     path("reports/books.pdf", views.export_books_pdf, name="export_books_pdf"),
     path("reports/tshirts.xlsx", views.export_tshirts_excel, name="export_tshirts_excel"),
+    path("reports/employees.xlsx", report_views.export_employees_excel, name="export_employees_excel"),
+    path("reports/book-history.xlsx", report_views.export_book_history_excel, name="export_book_history_excel"),
+    path("reports/book-history.pdf", report_views.export_book_history_pdf, name="export_book_history_pdf"),
+    path("reports/tshirt-history.xlsx", report_views.export_tshirt_allocations_excel, name="export_tshirt_allocations_excel"),
+    path("reports/tshirt-stock.pdf", report_views.export_tshirt_stock_pdf, name="export_tshirt_stock_pdf"),
+    path("reports/low-stock.xlsx", report_views.export_low_stock_excel, name="export_low_stock_excel"),
+    path("reports/audit.xlsx", report_views.export_audit_excel, name="export_audit_excel"),
 ]
