@@ -1,3 +1,16 @@
 {% extends 'inventory/base.html' %}{% block title %}Reports{% endblock %}
-{% block content %}<div class="page-header"><div><h1>Reports and Downloads</h1><p>Operational reports available to Staff, Admin and Super Admin</p></div></div>
-<div class="action-grid"><a class="action-card" href="{% url 'inventory:export_books_excel' %}"><b>Book Inventory Excel</b><span>Download current Book stock</span></a><a class="action-card" href="{% url 'inventory:export_books_pdf' %}"><b>Book Inventory PDF</b><span>Printable current Book stock</span></a><a class="action-card" href="{% url 'inventory:export_tshirts_excel' %}"><b>T-shirt Stock Excel</b><span>Brand and size-wise stock</span></a></div>{% endblock %}
+{% block content %}
+<div class="page-header"><div><h1>Reports and Downloads</h1><p>Excel and PDF reports with complete operational history.</p></div></div>
+<div class="action-grid">
+  <a class="action-card" href="{% url 'inventory:export_books_excel' %}"><b>Book Inventory Excel</b><span>Current Book stock and status</span></a>
+  <a class="action-card" href="{% url 'inventory:export_books_pdf' %}"><b>Book Inventory PDF</b><span>Printable current Book stock</span></a>
+  <a class="action-card" href="{% url 'inventory:export_book_history_excel' %}"><b>Book History Excel</b><span>Allocation and return history</span></a>
+  <a class="action-card" href="{% url 'inventory:export_book_history_pdf' %}"><b>Book History PDF</b><span>Printable allocation history</span></a>
+  <a class="action-card" href="{% url 'inventory:export_tshirts_excel' %}"><b>T-shirt Stock Excel</b><span>Brand and size-wise stock</span></a>
+  <a class="action-card" href="{% url 'inventory:export_tshirt_stock_pdf' %}"><b>T-shirt Stock PDF</b><span>Printable stock and low-stock status</span></a>
+  <a class="action-card" href="{% url 'inventory:export_tshirt_allocations_excel' %}"><b>T-shirt History Excel</b><span>Free, paid, pending, issued and rejected</span></a>
+  <a class="action-card" href="{% url 'inventory:export_low_stock_excel' %}"><b>Low-stock Excel</b><span>Items at or below configured threshold</span></a>
+  {% if user.role == 'ADMIN' or user.role == 'SUPER_ADMIN' %}<a class="action-card" href="{% url 'inventory:export_employees_excel' %}"><b>Employee Master Excel</b><span>Authorized employee master download</span></a>{% endif %}
+  {% if user.role == 'SUPER_ADMIN' %}<a class="action-card" href="{% url 'inventory:export_audit_excel' %}"><b>Audit History Excel</b><span>Complete privileged audit download</span></a>{% endif %}
+</div>
+{% endblock %}
