@@ -4,7 +4,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 
 from .enhanced_forms import TshirtStockThresholdForm
 from .forms import EmployeeRecordForm, TshirtBrandForm
-from .models import Book, BookAllocation, TshirtAllocation, TshirtBrand, TshirtStock, User
+from .models import BookAllocation, TshirtAllocation, TshirtBrand, TshirtStock, User
 from .permissions import role_required
 from .services import audit, free_entitlement
 
@@ -29,9 +29,7 @@ def employee_history(request, pk):
     employee = get_object_or_404(User, pk=pk)
     book_history = BookAllocation.objects.select_related("book", "allocated_by", "returned_by").filter(employee=employee)
     tshirt_history = TshirtAllocation.objects.select_related("stock", "stock__brand", "requested_by", "issued_by", "approved_by").filter(employee=employee)
-    entitlement_rows = []
-    for brand in TshirtBrand.objects.filter(is_active=True).order_by("name"):
-        entitlement_rows.append({"brand": brand, **free_entitlement(employee, brand)})
+    entitlement_rows = [{"brand": brand, **free_entitlement(employee, brand)} for brand in TshirtBrand.objects.filter(is_active=True).order_by("name")]
     return render(request, "inventory/employees/history.html", {
         "employee": employee,
         "book_history": book_history,
@@ -41,10 +39,9 @@ def employee_history(request, pk):
 
 
 @login_required
-def book_history(request, pk):
-    book = get_object_or_404(Book, pk=pk)
-    allocations = book.allocations.select_related("employee", "allocated_by", "returned_by").all()
-    return render(request, "inventory/books/history.html", {"book": book, "allocations": allocations})
+def book_history(request):
+    allocations = BookAllocation.objects.select_related("book", "employee", "allocated_by", "returned_by").all()
+    return render(request, "inventory/books/history.html", {"allocations": allocations})
 
 
 @role_required(User.Role.ADMIN, User.Role.SUPER_ADMIN)
