@@ -18,14 +18,17 @@ This document records the confirmed employee/user master requirements for **Next
 - Letters must be uppercase.
 - Spaces, hyphens and other special characters are not allowed in the Employee ID.
 - The user interface and backend must validate the format using the equivalent of `^NXTTP\d{4}$`.
-- The entered Employee ID must be reviewed before the record is saved.
+- The entered Employee ID must be reviewed before the employee/user record is saved.
 - Duplicate Employee IDs must be blocked by both the user interface and backend validation.
+- After the employee/user record is created, the Employee ID cannot be changed by Staff, Admin or Super Admin.
+- The Employee ID field must become read-only after creation, and backend APIs must reject any later attempt to change it.
+- A record created with an incorrect Employee ID must not be repaired by editing the ID. The incorrect record must be deactivated and a new correctly identified record must be created while preserving the original audit history.
 - Employee ID will be used to identify the employee/user in Book allocation, Book return, T-shirt allocation, free-entitlement calculation, paid T-shirt history, reports, search and audit logs.
 - Deactivating an account must not release or reuse its Employee ID.
 - Historical records must continue to show the original Employee ID even after the employee/user is deactivated.
-- Creating or changing an Employee ID must be recorded in the audit log with the acting user, old value where applicable, new value, date and time.
+- Creating an Employee ID must be recorded in the audit log with the acting user, new Employee ID, date and time.
+- Any rejected attempt to change an existing Employee ID must be recorded as a security event without changing the stored value.
 
-## Pending Decisions
+## Pending Decision
 
-- Whether an Employee ID may be changed after the employee/user is created.
 - Remaining employee/user master fields.
