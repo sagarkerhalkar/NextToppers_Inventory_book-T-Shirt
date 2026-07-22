@@ -10,91 +10,89 @@ These requirements are the approved baseline. New features may be added later, b
 
 ## Branding and Images
 
-The supplied Next Toppers group image will be used as the initial visual background for the login page and/or home page.
-
-The supplied Next Toppers full logo will be used as the initial official application logo.
-
-The application must include a Branding Settings area where authorized users can change:
-
-- Application logo
-- Login page background image
-- Home page image
-- Organization/profile picture
-- Individual user profile picture
-
-Confirmed branding permissions:
-
+- The supplied Next Toppers group image will be used as the initial login-page and/or home-page background.
+- The supplied Next Toppers full logo will be used as the initial application logo.
 - Super Admin can manage all branding images.
 - Admin can change the application logo, login background, home image and organization/profile picture.
 - Staff cannot change organization-level branding.
-- Staff can change their own profile picture, subject to validation.
+- Staff can change their own optional profile picture.
+- Replacement images must be validated for supported file type and size, previewed before saving and displayed responsively.
+- Organization-level branding changes must be recorded in the audit log.
 
-Uploaded replacement images must be validated for supported file type and size, previewed before saving, and displayed responsively on mobile, tablet and desktop screens.
+## User Roles and Permissions
 
-Every organization-level branding change must be recorded in the audit log with the acting user, changed item, date and time.
-
-## User Roles
-
-The application must support these three roles:
+The application must support:
 
 1. Super Admin
 2. Admin
 3. Staff
 
-Access must use role-based access control so that every screen and action is permitted or blocked according to the signed-in user's role.
+Permissions must be enforced in both the user interface and backend APIs.
 
-### Confirmed Staff Permissions
+### Staff
 
-- Staff can add and edit Book Inventory and T-shirt Inventory records when permitted.
-- Staff cannot delete Book Inventory or T-shirt Inventory records.
-- Delete buttons and delete APIs must be blocked for Staff accounts.
-- Staff can download all available Excel and PDF reports for Book and T-shirt inventory.
-- Staff can allocate Books and T-shirts to users.
-- Staff can receive returned books and mark them as **In Library**.
-- Staff can change their own profile picture.
-- Every Staff allocation or book-return action must update stock/status and be recorded in the audit log with the Staff user, recipient where applicable, item, quantity where applicable, return date where applicable, date and time.
+- Can add and edit Book and T-shirt inventory records.
+- Cannot delete Book or T-shirt inventory records.
+- Can allocate Books and T-shirts.
+- Can receive returned Books and mark them **In Library**.
+- Can download all available Book and T-shirt Excel and PDF reports.
+- Can change only their own profile picture.
+- Cannot create or manage user accounts, roles, permissions or organization branding.
 
-### Confirmed Admin Permissions
+### Admin
 
-- Admin can delete Book Inventory and T-shirt Inventory records.
-- Admin deletion must be protected by a confirmation step.
-- Each deletion must be recorded in the audit log with the Admin user, record type, record identifier, date and time.
-- Admin can create Staff accounts.
-- Admin can edit Staff account details.
-- Admin can activate or deactivate Staff accounts.
-- A deactivated Staff account cannot sign in, but its past inventory actions and audit history must remain available.
-- Admin can reset a Staff account password.
-- Admin can create, edit, activate and deactivate other Admin accounts.
-- Admin can securely reset other Admin passwords.
-- Admin can promote Staff to Admin and demote Admin to Staff when authorized.
-- Admin can change the application logo, login background, home image and organization/profile picture.
-- Password reset must create a temporary password or secure reset process; the Admin must never be shown the user's existing password.
-- The affected user must be required to create a new password at the next sign-in after an Admin reset.
-- Every password reset must be recorded in the audit log with the acting Admin, affected account, date and time, but no password may be stored in the audit log.
-- Admin cannot reset, create, edit, deactivate, promote, demote or delete Super Admin accounts.
-- Admin cannot assign the Super Admin role.
-- Every account creation, edit, activation, deactivation, role change and branding change must be recorded in the audit log.
+- Has all operational inventory permissions.
+- Can delete eligible Book and T-shirt records after confirmation.
+- Can create, edit, activate, deactivate and reset passwords for Staff accounts.
+- Can create, edit, activate, deactivate and reset passwords for other Admin accounts.
+- Can promote Staff to Admin and demote Admin to Staff when authorized.
+- Can change organization branding.
+- Cannot create, edit, deactivate, reset, demote or delete Super Admin accounts.
+- Cannot assign the Super Admin role.
 
-### Confirmed Super Admin Permissions
+### Super Admin
 
-- Super Admin can delete records.
-- Super Admin has full authority over role and permission management.
-- Super Admin can manage Super Admin, Admin and Staff accounts.
-- Super Admin can manage all system and branding settings.
+- Has full application access.
+- Can manage Super Admin, Admin and Staff accounts.
+- Can manage roles, permissions, system settings and branding.
+- Can access all reports, backups and audit logs.
 
-The remaining detailed permissions for each role will be finalized separately.
+### Account Security
+
+- User accounts must be deactivated rather than permanently deleted so their history remains available.
+- Passwords must never be visible to administrators or stored in audit logs.
+- Password resets must use a temporary password or secure reset process and require a new password at the next sign-in.
+- All important account, role, password, inventory, branding and configuration actions must be audited.
+
+## Employee and User Master
+
+- Employee ID is mandatory, unique, entered manually and cannot be changed after creation.
+- Employee ID format is `NXTTP` followed by exactly four digits, for example `NXTTP0043`.
+- Full name is mandatory.
+- Mobile number is mandatory and unique.
+- Mobile format is `+91` followed by exactly 10 digits.
+- Official email, department, designation, joining date, office/location and profile picture are optional.
+- The employee profile must store a default T-shirt size.
+- Login uses Employee ID plus password.
+- There is no employee self-service forgot-password process; an Admin or Super Admin performs the reset.
+- Detailed employee rules are maintained in `docs/EMPLOYEE_USER_MASTER.md`.
 
 ## 1. Application Scope
 
-The web application must manage two inventory categories:
+The application must manage:
 
 1. Book Inventory
 2. T-shirt Inventory
+3. Employee/user master and access
+4. Allocation, return, entitlement, approval, reporting, notification, backup and audit history
 
 ## 2. Book Inventory
 
-Each book record must support:
+Each physical Book must have its own unique Book Asset ID/barcode. The confirmed example format is `BOOK000001`.
 
+Each Book record must support:
+
+- Book Asset ID/barcode
 - Book name
 - Class name
 - Stream name
@@ -102,58 +100,52 @@ Each book record must support:
 - Purchase date
 - Bill number
 - Bill photo
-- Allocated to
+- Current condition: New, Good, Damaged or Lost
+- Current status, including Allocated or In Library
+- Allocated employee and Employee ID
 - Allocation date
 - Return date
-- Current status:
-  - Allocated
-  - In Library
+- Return condition
+- Return note
+- Complete allocation and return history
 
-## 3. Book Photo Automation
+### Book Photo Automation
 
-When the user uploads or captures a book photo, the application should automatically identify and fill, wherever possible:
+When a Book photo is uploaded or captured, the application should identify and prefill, wherever possible:
 
 - ISBN number
 - Book name
 - Class
 
-The remaining details will be entered manually by the user.
+The user must review and correct detected information before saving.
 
-The user must be able to review and correct automatically detected information before saving.
+### Book Allocation and Return Rules
 
-## 4. Book Inventory Actions
+- Staff, Admin and Super Admin can allocate Books.
+- A Book return due date is not required.
+- The application will not create overdue-Book alerts.
+- Book condition and a return note must be recorded during return.
+- Returning a Book must close the active allocation while preserving earlier allocation history.
+- Damaged and Lost Book records must remain in inventory history and must never be permanently deleted.
+- All allocation, return, condition and status changes must be audited.
 
-Authorized users must be able to:
+### Book Actions and Reports
 
-- Add book records
-- Edit book records
-- Delete book records, except Staff users
-- Allocate books, including Staff users
-- Receive returned books and mark them **In Library**, including Staff users
-- Save the return date and clear or close the active allocation as applicable
-- Download/export book data to Excel, including Staff users
-- Download/export book data to PDF, including Staff users
+Authorized users can add, edit, allocate, return, search, filter and export Book data.
 
-Every book return must be recorded in the book history and audit log without deleting the earlier allocation history.
+- Staff cannot delete Book records.
+- Admin and Super Admin can delete eligible records after confirmation, except protected Damaged/Lost history.
+- All Staff, Admin and Super Admin users can download available Book reports in Excel and PDF.
 
-## 5. T-shirt Logo/Brand Master
+## 3. T-Shirt Brand Master and Sizes
 
-The application must support editable T-shirt logo or brand names.
-
-Initial examples:
+Initial brands:
 
 - Next Toppers
 - Nirmaan
 - CUET
 
-An administrator must be able to:
-
-- Add a logo/brand
-- Edit a logo/brand
-- Delete a logo/brand
-- Set the free annual quantity for each logo/brand
-
-## 6. T-shirt Sizes
+Authorized administrators can add, edit or delete brands and configure free-entitlement quantities.
 
 Supported sizes:
 
@@ -165,115 +157,173 @@ Supported sizes:
 - XXL
 - XXXL
 
-## 7. T-shirt Stock Inventory
+## 4. T-Shirt Stock and Purchase Records
 
-Each stock record must support:
+Each stock purchase must support:
 
-- Logo/brand name
+- Brand/logo
 - Size
-- Number of T-shirts
+- Purchase date
+- Vendor
+- Bill number
+- Bill photo
+- Purchased quantity
+- Cost or total amount
 - Available quantity
 - Allocated quantity
 
-## 8. T-shirt Allocation
+Every stock change must preserve purchase and adjustment history.
 
-The T-shirt allocation section must store:
+## 5. T-Shirt Allocation
 
-- Allocated to
-- Logo/brand
+Each allocation must store:
+
+- Employee ID and employee name
+- Brand/logo
 - Size
-- Number of T-shirts allocated
+- Quantity
 - Allocation date
 - Free or paid issue status
+- Acting Staff/Admin/Super Admin user
 
-Staff, Admin and Super Admin can allocate T-shirts according to their confirmed permissions.
+Rules:
 
-Each allocation must update stock automatically and appear in the user's full T-shirt history.
+- Staff, Admin and Super Admin can allocate T-shirts.
+- Allocation must update stock automatically.
+- Every allocation must appear in the employee's complete T-shirt history.
+- An issued T-shirt cannot be returned to available stock.
 
-## 9. Annual Free T-shirt Entitlement
+## 6. Rolling 12-Month Free Entitlement
 
-Each user has a configurable free T-shirt allowance for each logo/brand during a 12-month period.
+Free-entitlement calculation uses a **rolling previous 12-month period**, not a calendar year or joining-date year.
 
-Initial example rules:
+Initial configurable allowances:
 
-- Next Toppers: 5 free T-shirts per user in 12 months
-- CUET: 1 free T-shirt per user in 12 months
-- Nirmaan: 5 free T-shirts per user in 12 months
+- Next Toppers: 5 free T-shirts per employee in a rolling 12 months
+- CUET: 1 free T-shirt per employee in a rolling 12 months
+- Nirmaan: 5 free T-shirts per employee in a rolling 12 months
 
-These limits must be editable by an administrator.
+Rules:
 
-The application must calculate and display for each user and logo:
+- A new employee receives the full free allowance immediately.
+- Unused allowance does not carry forward.
+- Allowances remain configurable by authorized administrators.
+- The application must show allowance, used quantity, remaining quantity, paid quantity and total received for each employee and brand.
 
-- Free allowance
-- Free quantity already used
-- Free quantity remaining
-- Paid quantity
-- Total quantity received
+## 7. Paid T-Shirt Issue After Free Limit
 
-## 10. Paid T-shirt Issue After Free Limit
+After the free limit is exhausted:
 
-After a user exhausts the free allowance for a logo within the 12-month period, any additional T-shirt requires purchase and HR approval.
+- A paid issue request is required.
+- Admin or Super Admin can approve or reject the request.
+- HR approval email/proof must be attachable and retained as part of the approval evidence.
+- Payment amount and payment proof are mandatory.
+- Stock must be deducted only after approval and payment proof are complete.
+- The application must retain Pending, Approved and Rejected request history.
+- Approved paid issues must appear in the employee's complete T-shirt allocation and purchase history.
 
-The application must store:
+Each request must store:
 
-- HR approval email attachment or approval proof
-- Payment date
-- T-shirt logo/brand
-- T-shirt size
+- Employee ID and name
+- Brand/logo
+- Size
 - Quantity
-- User receiving the T-shirt
-- Paid/approved status
+- Payment amount
+- Payment date
+- Payment proof
+- HR approval email/proof
+- Request status
+- Approver and approval date/time
+- Rejection reason when rejected
 
-The approved purchased T-shirt must then be added to the user's complete T-shirt allocation and purchase history.
+## 8. Alerts, Imports and Notifications
 
-## 11. T-shirt Administration and Reporting
+### Low-Stock Alerts
 
-Authorized users must be able to:
+- Book and T-shirt low-stock alerts are required.
+- Alert thresholds must be configurable by authorized administrators.
 
-- Add records
-- Edit records
-- Delete records, except Staff users
-- Allocate T-shirts, including Staff users
-- Download/export all permitted data to Excel, including Staff users
-- Download/export all permitted data to PDF, including Staff users
-- View logo-wise free, used, remaining, paid and total counts
-- View complete user-wise allocation and purchase history
+### Excel Imports
 
-## 12. Engineering and Quality Requirements
+- Bulk employee import through Excel is required.
+- Bulk Book inventory import through Excel is required.
+- Bulk T-shirt stock import through Excel is required.
+- Imports must validate records, identify errors and prevent duplicate Employee IDs, mobile numbers, Book Asset IDs and other unique values.
+
+### Notifications
+
+Approval and allocation notifications are required through:
+
+- In-app notifications
+- Google Chat
+- Email
+
+Notification history and delivery status must be retained for authorized users.
+
+## 9. Reporting and Exports
+
+Available reports must support appropriate filters and Excel/PDF download, including:
+
+- Book inventory
+- Book allocation and return history
+- Book condition and Lost/Damaged history
+- T-shirt stock and purchase history
+- T-shirt allocation history
+- Employee-wise Book and T-shirt history
+- Brand-wise free, used, remaining, paid and total counts
+- Paid request status and payment history
+- Low-stock status
+- Audit history for authorized roles
+
+Staff can download all available operational Book and T-shirt Excel/PDF reports. Sensitive administration and audit reports remain role-controlled.
+
+## 10. Backup and Recovery
+
+- Automatic daily database backup is required.
+- Super Admin must be able to download a manual backup.
+- Backup success or failure must be visible to Super Admin.
+- Backup and restore actions must be audited.
+- Restore must be protected by confirmation and authorized access.
+
+## 11. Language and User Experience
+
+- English is the primary application language.
+- Hindi language support is required.
+- The interface must be simple, responsive and usable on phones, tablets and computers.
+- It must work on Android, iPhone, iPad, Windows, macOS, Safari and major modern browsers.
+
+## 12. Engineering and Quality
 
 - All code must be tested.
 - Automated tests must be included.
 - GitHub Actions CI/CD must be included.
-- The application must be optimized for major browsers.
-- The application must work responsively on:
-  - Android phones
-  - iPhones
-  - Tablets
-  - iPads
-  - Windows computers
-  - macOS computers
-  - Safari
-  - Major modern desktop and mobile browsers
+- Role permissions must be tested at both UI and API levels.
+- Import, backup, allocation, return, entitlement, approval and audit logic must have automated tests.
+- Security validation must protect passwords and personal employee data.
 
 ## 13. GitHub Delivery
 
 Repository:
 
-- Owner: sagarkerhalkar
-- Repository: NextToppers_Inventory_book-T-Shirt
+- Owner: `sagarkerhalkar`
+- Repository: `NextToppers_Inventory_book-T-Shirt`
 
-The complete source code, tests, documentation and CI/CD configuration must be maintained in this repository.
+Complete source code, tests, documentation and CI/CD configuration must be maintained in this repository.
 
-Approved future updates should be committed and pushed to the repository during active development work.
+## 14. Deployment Plan
 
-## 14. Pending Business Details
+- Initial deployment will be on a local Windows computer/server.
+- Cloud deployment will be added later.
+- The production domain will be decided later.
+- The architecture and backup/export process must allow migration from the local Windows deployment to cloud hosting without losing data or history.
 
-The following details are still to be collected before implementation decisions are finalized:
+## 15. Remaining Implementation Inputs
 
-- Remaining detailed permissions for Super Admin, Admin and Staff
-- Employee/user master fields
-- Exact definition of the 12-month entitlement period
-- HR approval workflow details
-- Existing inventory Excel files, if any
-- Sample book and bill photographs
-- Deployment domain and hosting environment
+The business choices above are confirmed. The following implementation inputs can be supplied during build or deployment:
+
+- Existing employee, Book and T-shirt Excel data
+- Sample Book and bill photographs
+- Google Chat connection or space details
+- Email/SMTP connection details
+- Local Windows server specifications and backup destination
+- Future cloud provider and production domain
