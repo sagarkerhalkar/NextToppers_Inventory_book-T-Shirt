@@ -32,7 +32,16 @@ The application must support these three roles:
 2. Admin
 3. Staff
 
-Detailed permissions for each role will be finalized separately. Access must use role-based access control so that every screen and action is permitted or blocked according to the signed-in user's role.
+Access must use role-based access control so that every screen and action is permitted or blocked according to the signed-in user's role.
+
+### Confirmed Staff Permission
+
+- Staff can add and edit Book Inventory and T-shirt Inventory records when permitted.
+- Staff cannot delete Book Inventory or T-shirt Inventory records.
+- Delete buttons and delete APIs must be blocked for Staff accounts.
+- Deletion will only be available to an authorized Admin or Super Admin according to the final permission matrix.
+
+The remaining detailed permissions for each role will be finalized separately.
 
 ## 1. Application Scope
 
@@ -77,7 +86,7 @@ Authorized users must be able to:
 
 - Add book records
 - Edit book records
-- Delete book records
+- Delete book records, except Staff users
 - Allocate books
 - Record returned books
 - Download/export book data to Excel
@@ -177,7 +186,7 @@ Authorized users must be able to:
 
 - Add records
 - Edit records
-- Delete records
+- Delete records, except Staff users
 - Download/export data to Excel
 - Download/export data to PDF
 - View logo-wise free, used, remaining, paid and total counts
@@ -214,7 +223,7 @@ Approved future updates should be committed and pushed to the repository during 
 
 The following details are still to be collected before implementation decisions are finalized:
 
-- Detailed permissions for Super Admin, Admin and Staff
+- Remaining detailed permissions for Super Admin, Admin and Staff
 - Employee/user master fields
 - Exact definition of the 12-month entitlement period
 - HR approval workflow details
