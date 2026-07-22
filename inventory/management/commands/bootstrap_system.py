@@ -25,7 +25,7 @@ class Command(BaseCommand):
             password=options["password"],
             email=options["email"],
         )
-        for name, allowance in [("Next Toppers", 5), ("Nirmaan", 5), ("CUET", 1)]:
+        for name, allowance in [("Next Toppers", 5), ("Nirmaan", 5), ("CUET", 1), ("Mission Jeet", 0)]:
             brand, _ = TshirtBrand.objects.get_or_create(name=name, defaults={"free_quantity_rolling_12_months": allowance})
             for size, _label in User.TshirtSize.choices:
                 TshirtStock.objects.get_or_create(brand=brand, size=size)
