@@ -2,10 +2,11 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
 
+from .enhanced_forms import TshirtStockThresholdForm
 from .forms import EmployeeRecordForm, TshirtBrandForm
-from .models import BookAllocation, TshirtAllocation, TshirtBrand, TshirtStock, User
+from .models import Book, BookAllocation, TshirtAllocation, TshirtBrand, TshirtStock, User
 from .permissions import role_required
-from .services import audit
+from .services import audit, free_entitlement
 
 
 @role_required(User.Role.ADMIN, User.Role.SUPER_ADMIN)
@@ -28,11 +29,22 @@ def employee_history(request, pk):
     employee = get_object_or_404(User, pk=pk)
     book_history = BookAllocation.objects.select_related("book", "allocated_by", "returned_by").filter(employee=employee)
     tshirt_history = TshirtAllocation.objects.select_related("stock", "stock__brand", "requested_by", "issued_by", "approved_by").filter(employee=employee)
+    entitlement_rows = []
+    for brand in TshirtBrand.objects.filter(is_active=True).order_by("name"):
+        entitlement_rows.append({"brand": brand, **free_entitlement(employee, brand)})
     return render(request, "inventory/employees/history.html", {
         "employee": employee,
         "book_history": book_history,
         "tshirt_history": tshirt_history,
+        "entitlement_rows": entitlement_rows,
     })
+
+
+@login_required
+def book_history(request, pk):
+    book = get_object_or_404(Book, pk=pk)
+    allocations = book.allocations.select_related("employee", "allocated_by", "returned_by").all()
+    return render(request, "inventory/books/history.html", {"book": book, "allocations": allocations})
 
 
 @role_required(User.Role.ADMIN, User.Role.SUPER_ADMIN)
@@ -77,3 +89,15 @@ def tshirt_brand_deactivate(request, pk):
         audit(request.user, "TSHIRT_BRAND_DEACTIVATED", brand, f"Deactivated brand {brand.name}")
         messages.success(request, "Brand deactivated. Existing history and stock remain preserved.")
     return redirect("inventory:tshirt_brand_list")
+
+
+@role_required(User.Role.ADMIN, User.Role.SUPER_ADMIN)
+def tshirt_stock_threshold_edit(request, pk):
+    stock = get_object_or_404(TshirtStock.objects.select_related("brand"), pk=pk)
+    form = TshirtStockThresholdForm(request.POST or None, instance=stock)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        audit(request.user, "TSHIRT_LOW_STOCK_LIMIT_UPDATED", stock, f"Updated {stock.brand.name}/{stock.size} low-stock limit")
+        messages.success(request, "Low-stock alert limit updated.")
+        return redirect("inventory:tshirt_stock_list")
+    return render(request, "inventory/generic_form.html", {"form": form, "title": f"Low-stock Limit: {stock.brand.name} / {stock.size}"})
