@@ -53,7 +53,11 @@ Access must use role-based access control so that every screen and action is per
 - Admin can edit Staff account details.
 - Admin can activate or deactivate Staff accounts.
 - A deactivated Staff account cannot sign in, but its past inventory actions and audit history must remain available.
-- Admin cannot create, edit, deactivate, promote or delete Super Admin accounts.
+- Admin can reset a Staff account password.
+- Password reset must create a temporary password or secure reset process; the Admin must never be shown the Staff member's existing password.
+- The Staff member must be required to create a new password at the next sign-in after an Admin reset.
+- Every password reset must be recorded in the audit log with the Admin user, affected Staff account, date and time, but no password may be stored in the audit log.
+- Admin cannot reset, create, edit, deactivate, promote or delete Super Admin accounts.
 - Admin cannot give a Staff account the Admin or Super Admin role unless that permission is later explicitly approved.
 - Every Staff-account creation, edit, activation and deactivation must be recorded in the audit log.
 
