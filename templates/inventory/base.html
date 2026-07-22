@@ -22,6 +22,7 @@
         <li class="nav-item"><a class="nav-link" href="{% url 'inventory:tshirt_allocation_list' %}">Allocations</a></li>
         <li class="nav-item"><a class="nav-link" href="{% url 'inventory:reports' %}">Reports</a></li>
         {% if user.role == 'ADMIN' or user.role == 'SUPER_ADMIN' %}<li class="nav-item"><a class="nav-link" href="{% url 'inventory:employee_list' %}">Employees</a></li>{% endif %}
+        {% if user.role == 'ADMIN' or user.role == 'SUPER_ADMIN' %}<li class="nav-item"><a class="nav-link" href="{% url 'inventory:bulk_import' %}">Excel Imports</a></li>{% endif %}
         {% if user.role == 'ADMIN' or user.role == 'SUPER_ADMIN' %}<li class="nav-item"><a class="nav-link" href="{% url 'inventory:branding' %}">Branding</a></li>{% endif %}
         {% if user.role == 'SUPER_ADMIN' %}<li class="nav-item"><a class="nav-link" href="{% url 'inventory:download_database_backup' %}">Backup</a></li>{% endif %}
       </ul>
