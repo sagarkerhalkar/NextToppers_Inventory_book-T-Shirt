@@ -39,7 +39,14 @@ Access must use role-based access control so that every screen and action is per
 - Staff can add and edit Book Inventory and T-shirt Inventory records when permitted.
 - Staff cannot delete Book Inventory or T-shirt Inventory records.
 - Delete buttons and delete APIs must be blocked for Staff accounts.
-- Deletion will only be available to an authorized Admin or Super Admin according to the final permission matrix.
+
+### Confirmed Admin Permission
+
+- Admin can delete Book Inventory and T-shirt Inventory records.
+- Admin deletion must be protected by a confirmation step.
+- Each deletion must be recorded in the audit log with the Admin user, record type, record identifier, date and time.
+
+- Super Admin can delete records and has authority over role and permission management.
 
 The remaining detailed permissions for each role will be finalized separately.
 
