@@ -1,8 +1,12 @@
-# NextToppers Inventory Web App — Locked Requirements
+# Next Toppers Book and T-Shirt Inventory Management — Locked Requirements
 
 _Last updated: 22 July 2026_
 
 These requirements are the approved baseline. New features may be added later, but the requirements below must not be removed, ignored or weakened without the owner's explicit approval.
+
+## Official Application Name
+
+**Next Toppers Book and T-Shirt Inventory Management**
 
 ## 1. Application Scope
 
@@ -184,7 +188,6 @@ Approved future updates should be committed and pushed to the repository during 
 
 The following details are still to be collected before implementation decisions are finalized:
 
-- Final application display name
 - Official logo files
 - Administrator and user roles
 - Employee/user master fields
