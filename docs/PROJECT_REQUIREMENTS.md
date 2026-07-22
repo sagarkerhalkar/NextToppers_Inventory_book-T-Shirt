@@ -8,6 +8,32 @@ These requirements are the approved baseline. New features may be added later, b
 
 **Next Toppers Book and T-Shirt Inventory Management**
 
+## Branding and Images
+
+The supplied Next Toppers group image will be used as the initial visual background for the login page and/or home page.
+
+The supplied Next Toppers full logo will be used as the initial official application logo.
+
+The application must include an authorized Branding Settings area where the permitted administrator can change, when required:
+
+- Application logo
+- Login page background image
+- Home page image
+- Organization/profile picture
+- Individual user profile picture
+
+Uploaded replacement images must be validated for supported file type and size, previewed before saving, and displayed responsively on mobile, tablet and desktop screens.
+
+## User Roles
+
+The application must support these three roles:
+
+1. Super Admin
+2. Admin
+3. Staff
+
+Detailed permissions for each role will be finalized separately. Access must use role-based access control so that every screen and action is permitted or blocked according to the signed-in user's role.
+
 ## 1. Application Scope
 
 The web application must manage two inventory categories:
@@ -188,8 +214,7 @@ Approved future updates should be committed and pushed to the repository during 
 
 The following details are still to be collected before implementation decisions are finalized:
 
-- Official logo files
-- Administrator and user roles
+- Detailed permissions for Super Admin, Admin and Staff
 - Employee/user master fields
 - Exact definition of the 12-month entitlement period
 - HR approval workflow details
