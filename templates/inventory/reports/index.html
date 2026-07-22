@@ -1,0 +1,3 @@
+{% extends 'inventory/base.html' %}{% block title %}Reports{% endblock %}
+{% block content %}<div class="page-header"><div><h1>Reports and Downloads</h1><p>Operational reports available to Staff, Admin and Super Admin</p></div></div>
+<div class="action-grid"><a class="action-card" href="{% url 'inventory:export_books_excel' %}"><b>Book Inventory Excel</b><span>Download current Book stock</span></a><a class="action-card" href="{% url 'inventory:export_books_pdf' %}"><b>Book Inventory PDF</b><span>Printable current Book stock</span></a><a class="action-card" href="{% url 'inventory:export_tshirts_excel' %}"><b>T-shirt Stock Excel</b><span>Brand and size-wise stock</span></a></div>{% endblock %}

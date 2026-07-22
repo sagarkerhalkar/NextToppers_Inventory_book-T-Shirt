@@ -1,0 +1,19 @@
+{% extends 'inventory/base.html' %}{% block title %}Dashboard{% endblock %}
+{% block content %}
+<div class="page-header"><div><h1>Inventory Dashboard</h1><p>Live Book and T-shirt summary</p></div></div>
+<div class="row g-3">
+  <div class="col-6 col-xl-2"><div class="metric-card"><span>Total Books</span><strong>{{ book_total }}</strong></div></div>
+  <div class="col-6 col-xl-2"><div class="metric-card"><span>In Library</span><strong>{{ book_available }}</strong></div></div>
+  <div class="col-6 col-xl-2"><div class="metric-card"><span>Allocated</span><strong>{{ book_allocated }}</strong></div></div>
+  <div class="col-6 col-xl-2"><div class="metric-card"><span>Lost/Damaged</span><strong>{{ book_problem }}</strong></div></div>
+  <div class="col-6 col-xl-2"><div class="metric-card"><span>T-shirts Available</span><strong>{{ tshirt_available }}</strong></div></div>
+  <div class="col-6 col-xl-2"><div class="metric-card"><span>Paid Requests</span><strong>{{ pending_paid }}</strong></div></div>
+</div>
+<div class="action-grid mt-4">
+  <a href="{% url 'inventory:book_create' %}" class="action-card"><b>Add Book</b><span>Create a physical Book record</span></a>
+  <a href="{% url 'inventory:free_tshirt_issue' %}" class="action-card"><b>Issue Free T-shirt</b><span>Checks rolling 12-month allowance</span></a>
+  <a href="{% url 'inventory:paid_tshirt_request' %}" class="action-card"><b>Paid T-shirt Request</b><span>Upload payment and HR proof</span></a>
+  <a href="{% url 'inventory:reports' %}" class="action-card"><b>Download Reports</b><span>Excel and PDF exports</span></a>
+</div>
+{% if recent_audit %}<section class="content-card mt-4"><h2>Recent Audit Activity</h2><div class="table-responsive"><table class="table"><thead><tr><th>Time</th><th>User</th><th>Action</th><th>Description</th></tr></thead><tbody>{% for row in recent_audit %}<tr><td>{{ row.created_at }}</td><td>{{ row.actor|default:'System' }}</td><td>{{ row.action }}</td><td>{{ row.description }}</td></tr>{% endfor %}</tbody></table></div></section>{% endif %}
+{% endblock %}
