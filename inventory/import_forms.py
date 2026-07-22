@@ -4,12 +4,13 @@ from django import forms
 
 
 class BulkImportForm(forms.Form):
-    class ImportType(forms.TextChoices):
-        EMPLOYEES = "employees", "Employees"
-        BOOKS = "books", "Books"
-        TSHIRTS = "tshirts", "T-shirt stock"
+    IMPORT_CHOICES = [
+        ("employees", "Employees"),
+        ("books", "Books"),
+        ("tshirts", "T-shirt stock"),
+    ]
 
-    import_type = forms.ChoiceField(choices=ImportType.choices)
+    import_type = forms.ChoiceField(choices=IMPORT_CHOICES)
     excel_file = forms.FileField(help_text="Upload an .xlsx file. Maximum size: 10 MB.")
 
     def __init__(self, *args, **kwargs):
