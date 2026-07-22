@@ -10,12 +10,18 @@ This document records the confirmed employee/user master requirements for **Next
 
 - Every employee/user must have a unique Employee ID.
 - Employee ID is mandatory.
+- Employee ID will be entered manually by an authorized Admin or Super Admin when the employee/user record is created.
+- The application must not generate Employee IDs automatically.
+- The entered Employee ID must be reviewed before the record is saved.
 - Duplicate Employee IDs must be blocked by both the user interface and backend validation.
+- Employee ID may contain letters, numbers and approved separators according to the final organization format.
 - Employee ID will be used to identify the employee/user in Book allocation, Book return, T-shirt allocation, free-entitlement calculation, paid T-shirt history, reports, search and audit logs.
 - Deactivating an account must not release or reuse its Employee ID.
 - Historical records must continue to show the original Employee ID even after the employee/user is deactivated.
+- Creating or changing an Employee ID must be recorded in the audit log with the acting user, old value where applicable, new value, date and time.
 
-## Pending Decision
+## Pending Decisions
 
-- Whether Employee ID will be entered manually or generated automatically by the application.
+- The required Employee ID format or example, such as `NT001`, `EMP-001` or the organization's existing format.
+- Whether an Employee ID may be changed after the employee/user is created.
 - Remaining employee/user master fields.
