@@ -1,4 +1,4 @@
-# NextToppers Inventory — Books and T-Shirts
+# Next Toppers Book and T-Shirt Inventory Management
 
 A responsive web application for managing Next Toppers book inventory and T-shirt inventory.
 
