@@ -4,7 +4,7 @@ _Last updated: 22 July 2026_
 
 This document records the confirmed employee/user master requirements for **Next Toppers Book and T-Shirt Inventory Management**.
 
-## Confirmed Field
+## Confirmed Fields
 
 ### Employee ID
 
@@ -28,6 +28,13 @@ This document records the confirmed employee/user master requirements for **Next
 - Historical records must continue to show the original Employee ID even after the employee/user is deactivated.
 - Creating an Employee ID must be recorded in the audit log with the acting user, new Employee ID, date and time.
 - Any rejected attempt to change an existing Employee ID must be recorded as a security event without changing the stored value.
+
+### Employee Full Name
+
+- Every employee/user must have a full name.
+- Full name is mandatory when creating an employee/user record.
+- A blank full name must be blocked by both the user interface and backend validation.
+- The employee's full name must appear with the Employee ID in employee search, Book allocation and return records, T-shirt allocation and entitlement history, reports and audit records.
 
 ## Pending Decision
 
