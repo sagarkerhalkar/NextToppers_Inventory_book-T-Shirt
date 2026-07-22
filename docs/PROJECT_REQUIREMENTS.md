@@ -49,6 +49,13 @@ Access must use role-based access control so that every screen and action is per
 - Admin can delete Book Inventory and T-shirt Inventory records.
 - Admin deletion must be protected by a confirmation step.
 - Each deletion must be recorded in the audit log with the Admin user, record type, record identifier, date and time.
+- Admin can create Staff accounts.
+- Admin can edit Staff account details.
+- Admin can activate or deactivate Staff accounts.
+- A deactivated Staff account cannot sign in, but its past inventory actions and audit history must remain available.
+- Admin cannot create, edit, deactivate, promote or delete Super Admin accounts.
+- Admin cannot give a Staff account the Admin or Super Admin role unless that permission is later explicitly approved.
+- Every Staff-account creation, edit, activation and deactivation must be recorded in the audit log.
 
 ### Confirmed Super Admin Permissions
 
