@@ -4,7 +4,7 @@ from django.core.mail import send_mail
 from django.db import transaction
 from django.utils import timezone
 
-from .models import AuditLog, Book, BookAllocation, NotificationLog, TshirtAllocation, TshirtPurchase, TshirtStock
+from .models import AuditLog, Book, BookAllocation, Employee, NotificationLog, TshirtAllocation, TshirtPurchase, TshirtStock
 
 
 def audit(actor, action, entity, description="", metadata=None):
@@ -18,22 +18,26 @@ def audit(actor, action, entity, description="", metadata=None):
     )
 
 
+def _employee_kwargs(employee):
+    return {"employee_record": employee} if isinstance(employee, Employee) else {"employee": employee}
+
+
 @transaction.atomic
 def allocate_book(*, book, employee, actor):
     locked = Book.objects.select_for_update().get(pk=book.pk)
     if locked.status != Book.Status.IN_LIBRARY or locked.condition in {Book.Condition.LOST, Book.Condition.DAMAGED}:
         raise ValueError("This Book is not available for allocation.")
-    allocation = BookAllocation.objects.create(book=locked, employee=employee, allocated_by=actor)
+    allocation = BookAllocation.objects.create(book=locked, allocated_by=actor, **_employee_kwargs(employee))
     locked.status = Book.Status.ALLOCATED
     locked.save(update_fields=["status", "updated_at"])
     audit(actor, "BOOK_ALLOCATED", allocation, f"{locked.asset_id} allocated to {employee.employee_id}")
-    notify_allocation(employee, f"Book {locked.asset_id} - {locked.name} has been allocated to you.")
+    notify_allocation(employee, f"Book {locked.asset_id} - {locked.name} has been allocated to {employee.full_name}.")
     return allocation
 
 
 @transaction.atomic
 def return_book(*, allocation, condition, note, actor):
-    locked = BookAllocation.objects.select_for_update().select_related("book", "employee").get(pk=allocation.pk)
+    locked = BookAllocation.objects.select_for_update().select_related("book", "employee", "employee_record").get(pk=allocation.pk)
     if not locked.is_active:
         raise ValueError("This Book allocation is already closed.")
     if not note.strip():
@@ -47,12 +51,10 @@ def return_book(*, allocation, condition, note, actor):
     locked.save()
     book = locked.book
     book.condition = condition
-    book.status = {
-        Book.Condition.LOST: Book.Status.LOST,
-        Book.Condition.DAMAGED: Book.Status.DAMAGED,
-    }.get(condition, Book.Status.IN_LIBRARY)
+    book.status = {Book.Condition.LOST: Book.Status.LOST, Book.Condition.DAMAGED: Book.Status.DAMAGED}.get(condition, Book.Status.IN_LIBRARY)
     book.save(update_fields=["condition", "status", "updated_at"])
-    audit(actor, "BOOK_RETURNED", locked, f"{book.asset_id} returned by {locked.employee.employee_id}")
+    recipient = locked.recipient
+    audit(actor, "BOOK_RETURNED", locked, f"{book.asset_id} returned by {recipient.employee_id}")
     return locked
 
 
@@ -83,7 +85,6 @@ def issue_free_tshirts(*, employee, stock, quantity, actor):
     if locked.available_quantity < quantity:
         raise ValueError("T-shirt stock is insufficient.")
     allocation = TshirtAllocation.objects.create(
-        employee=employee,
         stock=locked,
         quantity=quantity,
         issue_type=TshirtAllocation.IssueType.FREE,
@@ -91,12 +92,13 @@ def issue_free_tshirts(*, employee, stock, quantity, actor):
         requested_by=actor,
         issued_by=actor,
         issued_at=timezone.now(),
+        **_employee_kwargs(employee),
     )
     locked.available_quantity -= quantity
     locked.allocated_quantity += quantity
     locked.save(update_fields=["available_quantity", "allocated_quantity", "updated_at"])
     audit(actor, "FREE_TSHIRT_ISSUED", allocation, f"Issued {quantity} free {locked.brand.name} T-shirt(s) to {employee.employee_id}")
-    notify_allocation(employee, f"{quantity} {locked.brand.name} T-shirt(s), size {locked.size}, have been issued to you.")
+    notify_allocation(employee, f"{quantity} {locked.brand.name} T-shirt(s), size {locked.size}, have been issued to {employee.full_name}.")
     return allocation
 
 
@@ -104,7 +106,6 @@ def create_paid_tshirt_request(*, employee, stock, quantity, actor, payment_amou
     if not payment_proof or not hr_approval_proof or not payment_amount or not payment_date:
         raise ValueError("Payment amount, payment date, payment proof and HR approval proof are mandatory.")
     allocation = TshirtAllocation.objects.create(
-        employee=employee,
         stock=stock,
         quantity=quantity,
         issue_type=TshirtAllocation.IssueType.PAID,
@@ -114,6 +115,7 @@ def create_paid_tshirt_request(*, employee, stock, quantity, actor, payment_amou
         payment_date=payment_date,
         payment_proof=payment_proof,
         hr_approval_proof=hr_approval_proof,
+        **_employee_kwargs(employee),
     )
     audit(actor, "PAID_TSHIRT_REQUESTED", allocation, f"Paid T-shirt request for {employee.employee_id}")
     return allocation
@@ -123,7 +125,7 @@ def create_paid_tshirt_request(*, employee, stock, quantity, actor, payment_amou
 def approve_paid_tshirt_request(*, allocation, actor):
     if actor.role not in {actor.Role.ADMIN, actor.Role.SUPER_ADMIN}:
         raise PermissionError("Only Admin or Super Admin can approve paid T-shirt requests.")
-    locked = TshirtAllocation.objects.select_for_update().select_related("stock", "stock__brand", "employee").get(pk=allocation.pk)
+    locked = TshirtAllocation.objects.select_for_update().select_related("stock", "stock__brand", "employee", "employee_record").get(pk=allocation.pk)
     if locked.status != TshirtAllocation.Status.PENDING or locked.issue_type != TshirtAllocation.IssueType.PAID:
         raise ValueError("This request is not pending approval.")
     if not locked.payment_proof or not locked.hr_approval_proof or not locked.payment_amount or not locked.payment_date:
@@ -141,8 +143,9 @@ def approve_paid_tshirt_request(*, allocation, actor):
     stock.available_quantity -= locked.quantity
     stock.allocated_quantity += locked.quantity
     stock.save(update_fields=["available_quantity", "allocated_quantity", "updated_at"])
-    audit(actor, "PAID_TSHIRT_APPROVED", locked, f"Approved paid T-shirt request for {locked.employee.employee_id}")
-    notify_allocation(locked.employee, f"Your paid T-shirt request for {stock.brand.name}, size {stock.size}, has been approved and issued.")
+    recipient = locked.recipient
+    audit(actor, "PAID_TSHIRT_APPROVED", locked, f"Approved paid T-shirt request for {recipient.employee_id}")
+    notify_allocation(recipient, f"Paid T-shirt request for {stock.brand.name}, size {stock.size}, has been approved and issued.")
     return locked
 
 
@@ -161,9 +164,10 @@ def reject_paid_tshirt_request(*, allocation, reason, actor):
 
 
 def notify_allocation(employee, message):
-    NotificationLog.objects.create(recipient=employee, channel=NotificationLog.Channel.IN_APP, message=message, status=NotificationLog.Status.SENT, sent_at=timezone.now())
+    log_kwargs = {"employee_record": employee} if isinstance(employee, Employee) else {"recipient": employee}
+    NotificationLog.objects.create(channel=NotificationLog.Channel.IN_APP, message=message, status=NotificationLog.Status.SENT, sent_at=timezone.now(), **log_kwargs)
     if employee.email:
-        log = NotificationLog.objects.create(recipient=employee, channel=NotificationLog.Channel.EMAIL, subject="Next Toppers Inventory Update", message=message)
+        log = NotificationLog.objects.create(channel=NotificationLog.Channel.EMAIL, subject="Next Toppers Inventory Update", message=message, **log_kwargs)
         try:
             send_mail(log.subject, message, settings.DEFAULT_FROM_EMAIL, [employee.email], fail_silently=False)
             log.status = NotificationLog.Status.SENT
@@ -174,7 +178,7 @@ def notify_allocation(employee, message):
         log.save()
     webhook = settings.GOOGLE_CHAT_WEBHOOK_URL
     if webhook:
-        log = NotificationLog.objects.create(recipient=employee, channel=NotificationLog.Channel.GOOGLE_CHAT, message=message)
+        log = NotificationLog.objects.create(channel=NotificationLog.Channel.GOOGLE_CHAT, message=message, **log_kwargs)
         try:
             response = requests.post(webhook, json={"text": message}, timeout=10)
             response.raise_for_status()

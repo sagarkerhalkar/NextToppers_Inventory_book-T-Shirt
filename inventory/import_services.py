@@ -1,14 +1,13 @@
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
-from secrets import token_urlsafe
 
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 from openpyxl import load_workbook
 
-from .models import Book, TshirtBrand, TshirtPurchase, TshirtStock, User
+from .models import Book, Employee, TshirtBrand, TshirtPurchase, TshirtStock, User
 from .services import audit
 
 
@@ -91,11 +90,7 @@ def _rows(uploaded_file):
     if not any(headers):
         raise ValueError("The first row must contain column headings.")
     for row_number, values in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
-        record = {
-            headers[index]: _clean(values[index]) if index < len(values) else ""
-            for index in range(len(headers))
-            if headers[index]
-        }
+        record = {headers[index]: _clean(values[index]) if index < len(values) else "" for index in range(len(headers)) if headers[index]}
         if any(value not in (None, "") for value in record.values()):
             yield row_number, record
 
@@ -109,7 +104,6 @@ def _require_columns(record, required):
 def import_employees(uploaded_file, actor):
     result = ImportResult("employees")
     valid_sizes = {choice for choice, _ in User.TshirtSize.choices}
-    valid_roles = {choice for choice, _ in User.Role.choices}
     for row_number, record in _rows(uploaded_file):
         result.total_rows += 1
         try:
@@ -117,35 +111,28 @@ def import_employees(uploaded_file, actor):
             employee_id = str(record["employee_id"]).upper()
             mobile = str(record["mobile_number"])
             size = str(record["default_tshirt_size"]).upper()
-            role = str(record.get("role") or User.Role.STAFF).upper()
             if size not in valid_sizes:
                 raise ValueError(f"Invalid T-shirt size '{size}'.")
-            if role not in valid_roles:
-                raise ValueError(f"Invalid role '{role}'.")
-            if actor.role == User.Role.ADMIN and role == User.Role.SUPER_ADMIN:
-                raise ValueError("Admin cannot import a Super Admin account.")
-            if User.objects.filter(employee_id=employee_id).exists():
+            if Employee.objects.filter(employee_id=employee_id).exists():
                 raise ValueError(f"Employee ID {employee_id} already exists.")
-            if User.objects.filter(mobile_number=mobile).exists():
+            if Employee.objects.filter(mobile_number=mobile).exists():
                 raise ValueError(f"Mobile number {mobile} already exists.")
-            temporary_password = str(record.get("temporary_password") or token_urlsafe(10))
             with transaction.atomic():
-                employee = User.objects.create_user(
+                employee = Employee(
                     employee_id=employee_id,
                     full_name=str(record["full_name"]),
                     mobile_number=mobile,
-                    password=temporary_password,
                     email=str(record.get("email") or ""),
-                    role=role,
                     department=str(record.get("department") or ""),
                     designation=str(record.get("designation") or ""),
                     joining_date=_date_value(record.get("joining_date")),
                     office_location=str(record.get("office_location") or ""),
                     default_tshirt_size=size,
-                    must_change_password=True,
+                    notes=str(record.get("notes") or ""),
                     is_active=True,
                 )
-                audit(actor, "EMPLOYEE_IMPORTED", employee, f"Imported {employee.employee_id} from Excel")
+                employee.save()
+                audit(actor, "EMPLOYEE_IMPORTED", employee, f"Imported non-login employee {employee.employee_id} from Excel")
             result.created += 1
         except (ValueError, ValidationError, IntegrityError) as exc:
             result.add_error(row_number, exc)
@@ -166,17 +153,7 @@ def import_books(uploaded_file, actor):
             if condition not in valid_conditions:
                 raise ValueError(f"Invalid Book condition '{condition}'.")
             with transaction.atomic():
-                book = Book(
-                    asset_id=asset_id,
-                    name=str(record["book_name"]),
-                    class_name=str(record.get("class_name") or ""),
-                    stream_name=str(record.get("stream_name") or ""),
-                    isbn=str(record.get("isbn") or ""),
-                    purchase_date=_date_value(record.get("purchase_date")),
-                    bill_number=str(record.get("bill_number") or ""),
-                    condition=condition,
-                    created_by=actor,
-                )
+                book = Book(asset_id=asset_id, name=str(record["book_name"]), class_name=str(record.get("class_name") or ""), stream_name=str(record.get("stream_name") or ""), isbn=str(record.get("isbn") or ""), purchase_date=_date_value(record.get("purchase_date")), bill_number=str(record.get("bill_number") or ""), condition=condition, created_by=actor)
                 book.full_clean(exclude=["asset_id"] if not asset_id else None)
                 book.save()
                 audit(actor, "BOOK_IMPORTED", book, f"Imported {book.asset_id} from Excel")
@@ -201,31 +178,19 @@ def import_tshirt_stock(uploaded_file, actor):
             free_allowance = _integer(record.get("free_allowance") or 0, "Free allowance", minimum=0)
             threshold = _integer(record.get("low_stock_threshold") or 5, "Low-stock threshold", minimum=0)
             with transaction.atomic():
-                brand, brand_created = TshirtBrand.objects.get_or_create(
-                    name__iexact=brand_name,
-                    defaults={"name": brand_name, "free_quantity_rolling_12_months": free_allowance},
-                )
-                if not brand_created and record.get("free_allowance") not in (None, ""):
+                brand = TshirtBrand.objects.filter(name__iexact=brand_name).first()
+                brand_created = brand is None
+                if brand_created:
+                    brand = TshirtBrand.objects.create(name=brand_name, free_quantity_rolling_12_months=free_allowance)
+                elif record.get("free_allowance") not in (None, ""):
                     brand.free_quantity_rolling_12_months = free_allowance
                     brand.save(update_fields=["free_quantity_rolling_12_months", "updated_at"])
-                stock, stock_created = TshirtStock.objects.get_or_create(
-                    brand=brand,
-                    size=size,
-                    defaults={"low_stock_threshold": threshold},
-                )
+                stock, stock_created = TshirtStock.objects.get_or_create(brand=brand, size=size, defaults={"low_stock_threshold": threshold})
                 if not stock_created and record.get("low_stock_threshold") not in (None, ""):
                     stock.low_stock_threshold = threshold
                 stock.available_quantity += quantity
                 stock.save()
-                purchase = TshirtPurchase.objects.create(
-                    stock=stock,
-                    purchase_date=_date_value(record.get("purchase_date")) or timezone.localdate(),
-                    vendor=str(record.get("vendor") or ""),
-                    bill_number=str(record.get("bill_number") or ""),
-                    quantity=quantity,
-                    total_cost=_decimal(record.get("total_cost"), "Total cost"),
-                    created_by=actor,
-                )
+                purchase = TshirtPurchase.objects.create(stock=stock, purchase_date=_date_value(record.get("purchase_date")) or timezone.localdate(), vendor=str(record.get("vendor") or ""), bill_number=str(record.get("bill_number") or ""), quantity=quantity, total_cost=_decimal(record.get("total_cost"), "Total cost"), created_by=actor)
                 audit(actor, "TSHIRT_STOCK_IMPORTED", purchase, f"Imported {quantity} units for {stock}")
             result.created += 1 if stock_created else 0
             result.updated += 0 if stock_created else 1
@@ -235,11 +200,7 @@ def import_tshirt_stock(uploaded_file, actor):
 
 
 def run_import(import_type, uploaded_file, actor):
-    handlers = {
-        "employees": import_employees,
-        "books": import_books,
-        "tshirts": import_tshirt_stock,
-    }
+    handlers = {"employees": import_employees, "books": import_books, "tshirts": import_tshirt_stock}
     try:
         handler = handlers[import_type]
     except KeyError as exc:

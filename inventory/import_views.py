@@ -17,32 +17,19 @@ TEMPLATES = {
     "employees": {
         "filename": "employee_import_template.xlsx",
         "sheet": "Employees",
-        "headers": [
-            "employee_id", "full_name", "mobile_number", "default_tshirt_size",
-            "email", "role", "department", "designation", "joining_date",
-            "office_location", "temporary_password",
-        ],
-        "example": [
-            "NXTTP0043", "Example Employee", "+919876543210", "L",
-            "employee@example.com", "STAFF", "", "", "2026-07-22", "", "ChangeMe123!",
-        ],
+        "headers": ["employee_id", "full_name", "mobile_number", "default_tshirt_size", "email", "department", "designation", "joining_date", "office_location", "notes"],
+        "example": ["NXTTP0043", "Example Employee", "+919876543210", "L", "employee@example.com", "", "", "2026-07-22", "", "Non-login employee record"],
     },
     "books": {
         "filename": "book_import_template.xlsx",
         "sheet": "Books",
-        "headers": [
-            "asset_id", "book_name", "class_name", "stream_name", "isbn",
-            "purchase_date", "bill_number", "condition",
-        ],
+        "headers": ["asset_id", "book_name", "class_name", "stream_name", "isbn", "purchase_date", "bill_number", "condition"],
         "example": ["", "Physics Part 1", "11", "Science", "9780000000000", "2026-07-22", "BILL-001", "GOOD"],
     },
     "tshirts": {
         "filename": "tshirt_stock_import_template.xlsx",
         "sheet": "Tshirt Stock",
-        "headers": [
-            "brand", "size", "quantity", "purchase_date", "vendor", "bill_number",
-            "total_cost", "free_allowance", "low_stock_threshold",
-        ],
+        "headers": ["brand", "size", "quantity", "purchase_date", "vendor", "bill_number", "total_cost", "free_allowance", "low_stock_threshold"],
         "example": ["Next Toppers", "L", 25, "2026-07-22", "Vendor Name", "TS-001", 7500, 5, 5],
     },
 }
@@ -54,24 +41,8 @@ def bulk_import(request):
     result = None
     if request.method == "POST" and form.is_valid():
         try:
-            result = run_import(
-                form.cleaned_data["import_type"],
-                form.cleaned_data["excel_file"],
-                request.user,
-            )
-            audit(
-                request.user,
-                "BULK_IMPORT_COMPLETED",
-                request.user,
-                f"{result.import_type}: {result.successful} successful, {result.failed} failed",
-                metadata={
-                    "import_type": result.import_type,
-                    "total_rows": result.total_rows,
-                    "created": result.created,
-                    "updated": result.updated,
-                    "failed": result.failed,
-                },
-            )
+            result = run_import(form.cleaned_data["import_type"], form.cleaned_data["excel_file"], request.user)
+            audit(request.user, "BULK_IMPORT_COMPLETED", request.user, f"{result.import_type}: {result.successful} successful, {result.failed} failed", metadata={"import_type": result.import_type, "total_rows": result.total_rows, "created": result.created, "updated": result.updated, "failed": result.failed})
             if result.failed:
                 messages.warning(request, f"Import completed with {result.failed} row error(s).")
             else:
@@ -87,7 +58,6 @@ def download_import_template(request, import_type):
         definition = TEMPLATES[import_type]
     except KeyError as exc:
         raise Http404("Unknown import template") from exc
-
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = definition["sheet"]
@@ -101,12 +71,8 @@ def download_import_template(request, import_type):
     for column in sheet.columns:
         width = max(len(str(cell.value or "")) for cell in column) + 3
         sheet.column_dimensions[column[0].column_letter].width = min(max(width, 12), 35)
-
     output = BytesIO()
     workbook.save(output)
-    response = HttpResponse(
-        output.getvalue(),
-        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
+    response = HttpResponse(output.getvalue(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     response["Content-Disposition"] = f'attachment; filename="{definition["filename"]}"'
     return response

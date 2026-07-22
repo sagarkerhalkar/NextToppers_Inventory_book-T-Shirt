@@ -24,7 +24,7 @@ class User(AbstractUser):
     class Role(models.TextChoices):
         SUPER_ADMIN = "SUPER_ADMIN", "Super Admin"
         ADMIN = "ADMIN", "Admin"
-        STAFF = "STAFF", "Staff"
+        STAFF = "STAFF", "Data Entry User"
 
     class TshirtSize(models.TextChoices):
         XS = "XS", "XS"
@@ -45,7 +45,7 @@ class User(AbstractUser):
     designation = models.CharField(max_length=120, blank=True)
     joining_date = models.DateField(null=True, blank=True)
     office_location = models.CharField(max_length=160, blank=True)
-    profile_picture = models.ImageField(upload_to="profiles/", blank=True)
+    profile_picture = models.ImageField(upload_to="login_users/", blank=True)
     default_tshirt_size = models.CharField(max_length=5, choices=TshirtSize.choices, default=TshirtSize.L)
     must_change_password = models.BooleanField(default=False)
 
@@ -60,7 +60,7 @@ class User(AbstractUser):
         if self.pk:
             old_id = type(self).objects.filter(pk=self.pk).values_list("employee_id", flat=True).first()
             if old_id and old_id != self.employee_id:
-                raise ValidationError("Employee ID cannot be changed after the employee record is created.")
+                raise ValidationError("Login User ID cannot be changed after the account is created.")
         if self.role in {self.Role.ADMIN, self.Role.SUPER_ADMIN}:
             self.is_staff = True
         elif not self.is_superuser:
@@ -73,6 +73,41 @@ class User(AbstractUser):
     @property
     def is_admin_role(self):
         return self.role in {self.Role.ADMIN, self.Role.SUPER_ADMIN}
+
+
+class Employee(TimeStampedModel):
+    """Non-login employee master used for Book and T-shirt transactions."""
+
+    employee_id = models.CharField(max_length=9, unique=True, validators=[validate_employee_id])
+    full_name = models.CharField(max_length=180)
+    mobile_number = models.CharField(max_length=13, unique=True, validators=[validate_indian_mobile])
+    email = models.EmailField(blank=True)
+    department = models.CharField(max_length=120, blank=True)
+    designation = models.CharField(max_length=120, blank=True)
+    joining_date = models.DateField(null=True, blank=True)
+    office_location = models.CharField(max_length=160, blank=True)
+    profile_picture = models.ImageField(upload_to="employees/", blank=True)
+    default_tshirt_size = models.CharField(max_length=5, choices=User.TshirtSize.choices, default=User.TshirtSize.L)
+    is_active = models.BooleanField(default=True)
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["employee_id"]
+        indexes = [models.Index(fields=["full_name", "mobile_number"])]
+
+    def save(self, *args, **kwargs):
+        self.employee_id = (self.employee_id or "").upper().strip()
+        self.mobile_number = (self.mobile_number or "").strip()
+        self.full_name = (self.full_name or "").strip()
+        if self.pk:
+            old_id = type(self).objects.filter(pk=self.pk).values_list("employee_id", flat=True).first()
+            if old_id and old_id != self.employee_id:
+                raise ValidationError("Employee ID cannot be changed after the employee record is created.")
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.employee_id} - {self.full_name}"
 
 
 class AuditLog(models.Model):
@@ -163,7 +198,8 @@ class Book(TimeStampedModel):
 
 class BookAllocation(TimeStampedModel):
     book = models.ForeignKey(Book, on_delete=models.PROTECT, related_name="allocations")
-    employee = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="book_allocations")
+    employee = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name="legacy_book_allocations")
+    employee_record = models.ForeignKey(Employee, null=True, blank=True, on_delete=models.PROTECT, related_name="book_allocations")
     allocated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="book_allocations_made")
     allocated_at = models.DateTimeField(default=timezone.now)
     is_active = models.BooleanField(default=True)
@@ -174,15 +210,24 @@ class BookAllocation(TimeStampedModel):
 
     class Meta:
         ordering = ["-allocated_at"]
-        constraints = [
-            models.UniqueConstraint(fields=["book"], condition=Q(is_active=True), name="one_active_allocation_per_book")
-        ]
+        constraints = [models.UniqueConstraint(fields=["book"], condition=Q(is_active=True), name="one_active_allocation_per_book")]
+
+    def clean(self):
+        if not self.employee_record_id and not self.employee_id:
+            raise ValidationError("An employee is required for Book allocation.")
+
+    @property
+    def recipient(self):
+        return self.employee_record or self.employee
 
 
 class TshirtBrand(TimeStampedModel):
     name = models.CharField(max_length=100, unique=True)
     free_quantity_rolling_12_months = models.PositiveIntegerField(default=0)
     is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["name"]
 
     def __str__(self):
         return self.name
@@ -229,7 +274,8 @@ class TshirtAllocation(TimeStampedModel):
         REJECTED = "REJECTED", "Rejected"
         ISSUED = "ISSUED", "Issued"
 
-    employee = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="tshirt_allocations")
+    employee = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name="legacy_tshirt_allocations")
+    employee_record = models.ForeignKey(Employee, null=True, blank=True, on_delete=models.PROTECT, related_name="tshirt_allocations")
     stock = models.ForeignKey(TshirtStock, on_delete=models.PROTECT, related_name="allocations")
     quantity = models.PositiveIntegerField(default=1)
     issue_type = models.CharField(max_length=10, choices=IssueType.choices)
@@ -249,18 +295,30 @@ class TshirtAllocation(TimeStampedModel):
     class Meta:
         ordering = ["-requested_at"]
 
+    def clean(self):
+        if not self.employee_record_id and not self.employee_id:
+            raise ValidationError("An employee is required for T-shirt allocation.")
+
+    @property
+    def recipient(self):
+        return self.employee_record or self.employee
+
     @classmethod
     def rolling_free_used(cls, employee, brand, as_of=None):
         as_of = as_of or timezone.now()
         start = as_of - timedelta(days=365)
-        return cls.objects.filter(
-            employee=employee,
-            stock__brand=brand,
-            issue_type=cls.IssueType.FREE,
-            status=cls.Status.ISSUED,
-            issued_at__gte=start,
-            issued_at__lte=as_of,
-        ).aggregate(total=models.Sum("quantity"))["total"] or 0
+        filters = {
+            "stock__brand": brand,
+            "issue_type": cls.IssueType.FREE,
+            "status": cls.Status.ISSUED,
+            "issued_at__gte": start,
+            "issued_at__lte": as_of,
+        }
+        if isinstance(employee, Employee):
+            filters["employee_record"] = employee
+        else:
+            filters["employee"] = employee
+        return cls.objects.filter(**filters).aggregate(total=models.Sum("quantity"))["total"] or 0
 
 
 class NotificationLog(models.Model):
@@ -275,6 +333,7 @@ class NotificationLog(models.Model):
         FAILED = "FAILED", "Failed"
 
     recipient = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
+    employee_record = models.ForeignKey(Employee, null=True, blank=True, on_delete=models.SET_NULL, related_name="notification_logs")
     channel = models.CharField(max_length=20, choices=Channel.choices)
     subject = models.CharField(max_length=200, blank=True)
     message = models.TextField()

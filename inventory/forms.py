@@ -3,7 +3,7 @@ from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 
-from .models import BrandingSettings, Book, TshirtAllocation, TshirtBrand, TshirtPurchase, TshirtStock, User
+from .models import BrandingSettings, Book, Employee, TshirtBrand, TshirtPurchase, TshirtStock, User
 
 
 class StyledFormMixin:
@@ -15,54 +15,48 @@ class StyledFormMixin:
             field.widget.attrs.setdefault("class", css)
 
 
-class EmployeeCreateForm(StyledFormMixin, UserCreationForm):
+class LoginUserCreateForm(StyledFormMixin, UserCreationForm):
     class Meta:
         model = User
-        fields = ["employee_id", "full_name", "mobile_number", "email", "role", "department", "designation", "joining_date", "office_location", "profile_picture", "default_tshirt_size"]
-        widgets = {"joining_date": forms.DateInput(attrs={"type": "date"})}
+        fields = ["employee_id", "full_name", "mobile_number", "email", "role", "department", "designation", "office_location", "profile_picture"]
 
     def __init__(self, *args, actor=None, **kwargs):
         super().__init__(*args, **kwargs)
         if actor and actor.role == User.Role.ADMIN:
-            self.fields["role"].choices = [(User.Role.STAFF, "Staff"), (User.Role.ADMIN, "Admin")]
+            self.fields["role"].choices = [(User.Role.STAFF, "Data Entry User"), (User.Role.ADMIN, "Admin")]
         self._style_fields()
 
 
-class EmployeeRecordForm(StyledFormMixin, forms.ModelForm):
-    """Creates an employee used only for inventory allocation/history, without login access."""
-
+class LoginUserUpdateForm(StyledFormMixin, forms.ModelForm):
     class Meta:
         model = User
-        fields = ["employee_id", "full_name", "mobile_number", "email", "department", "designation", "joining_date", "office_location", "profile_picture", "default_tshirt_size"]
-        widgets = {"joining_date": forms.DateInput(attrs={"type": "date"})}
+        fields = ["full_name", "mobile_number", "email", "role", "department", "designation", "office_location", "profile_picture", "is_active"]
+
+    def __init__(self, *args, actor=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if actor and actor.role == User.Role.ADMIN:
+            self.fields["role"].choices = [(User.Role.STAFF, "Data Entry User"), (User.Role.ADMIN, "Admin")]
+        self._style_fields()
+
+
+EmployeeCreateForm = LoginUserCreateForm
+EmployeeUpdateForm = LoginUserUpdateForm
+
+
+class EmployeeRecordForm(StyledFormMixin, forms.ModelForm):
+    class Meta:
+        model = Employee
+        fields = [
+            "employee_id", "full_name", "mobile_number", "email", "department", "designation",
+            "joining_date", "office_location", "profile_picture", "default_tshirt_size", "is_active", "notes",
+        ]
+        widgets = {"joining_date": forms.DateInput(attrs={"type": "date"}), "notes": forms.Textarea(attrs={"rows": 3})}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._style_fields()
-
-    def save(self, commit=True):
-        employee = super().save(commit=False)
-        employee.role = User.Role.STAFF
-        employee.is_staff = False
-        employee.must_change_password = False
-        employee.set_unusable_password()
-        if commit:
-            employee.save()
-            self.save_m2m()
-        return employee
-
-
-class EmployeeUpdateForm(StyledFormMixin, forms.ModelForm):
-    class Meta:
-        model = User
-        fields = ["full_name", "mobile_number", "email", "role", "department", "designation", "joining_date", "office_location", "profile_picture", "default_tshirt_size", "is_active"]
-        widgets = {"joining_date": forms.DateInput(attrs={"type": "date"})}
-
-    def __init__(self, *args, actor=None, **kwargs):
-        super().__init__(*args, **kwargs)
-        if actor and actor.role == User.Role.ADMIN:
-            self.fields["role"].choices = [(User.Role.STAFF, "Staff"), (User.Role.ADMIN, "Admin")]
-        self._style_fields()
+        if self.instance and self.instance.pk:
+            self.fields.pop("employee_id", None)
 
 
 class AdminPasswordResetForm(StyledFormMixin, forms.Form):
@@ -98,11 +92,11 @@ class BookForm(StyledFormMixin, forms.ModelForm):
 
 
 class BookAllocationForm(StyledFormMixin, forms.Form):
-    employee = forms.ModelChoiceField(queryset=User.objects.none())
+    employee = forms.ModelChoiceField(queryset=Employee.objects.none())
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["employee"].queryset = User.objects.filter(is_active=True).order_by("employee_id")
+        self.fields["employee"].queryset = Employee.objects.filter(is_active=True).order_by("employee_id")
         self._style_fields()
 
 
@@ -134,30 +128,34 @@ class TshirtPurchaseForm(StyledFormMixin, forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["stock"].queryset = TshirtStock.objects.select_related("brand").filter(brand__is_active=True).order_by("brand__name", "size")
         self._style_fields()
 
 
 class FreeTshirtIssueForm(StyledFormMixin, forms.Form):
-    employee = forms.ModelChoiceField(queryset=User.objects.none())
+    employee = forms.ModelChoiceField(queryset=Employee.objects.none())
     stock = forms.ModelChoiceField(queryset=TshirtStock.objects.none())
     quantity = forms.IntegerField(min_value=1, initial=1)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["employee"].queryset = User.objects.filter(is_active=True).order_by("employee_id")
+        self.fields["employee"].queryset = Employee.objects.filter(is_active=True).order_by("employee_id")
         self.fields["stock"].queryset = TshirtStock.objects.select_related("brand").filter(brand__is_active=True).order_by("brand__name", "size")
         self._style_fields()
 
 
-class PaidTshirtRequestForm(StyledFormMixin, forms.ModelForm):
-    class Meta:
-        model = TshirtAllocation
-        fields = ["employee", "stock", "quantity", "payment_amount", "payment_date", "payment_proof", "hr_approval_proof"]
-        widgets = {"payment_date": forms.DateInput(attrs={"type": "date"})}
+class PaidTshirtRequestForm(StyledFormMixin, forms.Form):
+    employee = forms.ModelChoiceField(queryset=Employee.objects.none())
+    stock = forms.ModelChoiceField(queryset=TshirtStock.objects.none())
+    quantity = forms.IntegerField(min_value=1, initial=1)
+    payment_amount = forms.DecimalField(max_digits=12, decimal_places=2, min_value=0.01)
+    payment_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
+    payment_proof = forms.FileField()
+    hr_approval_proof = forms.FileField()
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["employee"].queryset = User.objects.filter(is_active=True).order_by("employee_id")
+        self.fields["employee"].queryset = Employee.objects.filter(is_active=True).order_by("employee_id")
         self.fields["stock"].queryset = TshirtStock.objects.select_related("brand").filter(brand__is_active=True).order_by("brand__name", "size")
         self._style_fields()
 

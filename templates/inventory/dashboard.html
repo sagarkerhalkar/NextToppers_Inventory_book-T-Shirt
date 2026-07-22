@@ -1,19 +1,33 @@
 {% extends 'inventory/base.html' %}{% block title %}Dashboard{% endblock %}
 {% block content %}
-<div class="page-header"><div><h1>Inventory Dashboard</h1><p>Live Book and T-shirt summary</p></div></div>
-<div class="row g-3">
-  <div class="col-6 col-xl-2"><div class="metric-card"><span>Total Books</span><strong>{{ book_total }}</strong></div></div>
-  <div class="col-6 col-xl-2"><div class="metric-card"><span>In Library</span><strong>{{ book_available }}</strong></div></div>
-  <div class="col-6 col-xl-2"><div class="metric-card"><span>Allocated</span><strong>{{ book_allocated }}</strong></div></div>
-  <div class="col-6 col-xl-2"><div class="metric-card"><span>Lost/Damaged</span><strong>{{ book_problem }}</strong></div></div>
-  <div class="col-6 col-xl-2"><div class="metric-card"><span>T-shirts Available</span><strong>{{ tshirt_available }}</strong></div></div>
-  <div class="col-6 col-xl-2"><div class="metric-card"><span>Paid Requests</span><strong>{{ pending_paid }}</strong></div></div>
+<section class="hero-panel dashboard-hero">
+  <div><span class="eyebrow">GLOBAL INVENTORY COMMAND CENTER</span><h1>Control every Book and T-shirt movement</h1><p>Employee-wise history, live stock, allocation timing and complete audit visibility.</p><div class="hero-actions"><a href="{% url 'inventory:book_create' %}" class="btn btn-light">+ Add Book</a><a href="{% url 'inventory:free_tshirt_issue' %}" class="btn btn-primary btn-glow">Issue T-shirt</a><a href="{% url 'inventory:employee_create' %}" class="btn btn-outline-light">+ Add Employee</a></div></div>
+  <div class="hero-visual"><div class="orbit orbit-a"></div><div class="orbit orbit-b"></div><div class="hero-cube"><span>NT</span><small>LIVE</small></div></div>
+</section>
+<div class="metric-grid dashboard-metrics">
+  <div class="metric-card metric-blue"><span>Active Employees</span><strong data-count="{{ employee_total }}">{{ employee_total }}</strong><small>Non-login employee master</small></div>
+  <div class="metric-card metric-cyan"><span>Total Books</span><strong data-count="{{ book_total }}">{{ book_total }}</strong><small>{{ book_available }} currently in library</small></div>
+  <div class="metric-card metric-violet"><span>Books Allocated</span><strong data-count="{{ book_allocated }}">{{ book_allocated }}</strong><small>Live employee possession</small></div>
+  <div class="metric-card metric-orange"><span>Lost / Damaged</span><strong data-count="{{ book_problem }}">{{ book_problem }}</strong><small>Protected historical records</small></div>
+  <div class="metric-card metric-green"><span>T-shirts Available</span><strong data-count="{{ tshirt_available }}">{{ tshirt_available }}</strong><small>Across all active brands</small></div>
+  <div class="metric-card metric-red"><span>Low Stock Items</span><strong data-count="{{ low_stock }}">{{ low_stock }}</strong><small>{{ pending_paid }} paid request(s) pending</small></div>
 </div>
-<div class="action-grid mt-4">
-  <a href="{% url 'inventory:book_create' %}" class="action-card"><b>Add Book</b><span>Create a physical Book record</span></a>
-  <a href="{% url 'inventory:free_tshirt_issue' %}" class="action-card"><b>Issue Free T-shirt</b><span>Checks rolling 12-month allowance</span></a>
-  <a href="{% url 'inventory:paid_tshirt_request' %}" class="action-card"><b>Paid T-shirt Request</b><span>Upload payment and HR proof</span></a>
-  <a href="{% url 'inventory:reports' %}" class="action-card"><b>Download Reports</b><span>Excel and PDF exports</span></a>
+<div class="row g-4">
+  <div class="col-xl-7"><section class="content-card premium-card chart-card"><div class="section-title"><div><span class="eyebrow">STOCK INTELLIGENCE</span><h2>Brand-wise T-shirt Position</h2></div><a href="{% url 'inventory:tshirt_stock_list' %}" class="btn btn-sm btn-outline-primary">Open Stock</a></div><div class="chart-wrap"><canvas id="stockChart"></canvas></div></section></div>
+  <div class="col-xl-5"><section class="content-card premium-card chart-card"><div class="section-title"><div><span class="eyebrow">BOOK HEALTH</span><h2>Book Status Distribution</h2></div><a href="{% url 'inventory:book_history' %}" class="btn btn-sm btn-outline-primary">Full Log</a></div><div class="chart-wrap doughnut-wrap"><canvas id="bookChart"></canvas></div></section></div>
 </div>
-{% if recent_audit %}<section class="content-card mt-4"><h2>Recent Audit Activity</h2><div class="table-responsive"><table class="table"><thead><tr><th>Time</th><th>User</th><th>Action</th><th>Description</th></tr></thead><tbody>{% for row in recent_audit %}<tr><td>{{ row.created_at }}</td><td>{{ row.actor|default:'System' }}</td><td>{{ row.action }}</td><td>{{ row.description }}</td></tr>{% endfor %}</tbody></table></div></section>{% endif %}
+<div class="row g-4 mt-0">
+  <div class="col-xl-8"><section class="content-card premium-card"><div class="section-title"><div><span class="eyebrow">LIVE OPERATIONS</span><h2>Recent Allocation Activity</h2></div></div><div class="activity-timeline">{% for item in recent_activity %}<div class="activity-row"><span class="activity-icon {% if item.kind == 'Book' %}book-icon{% else %}shirt-icon{% endif %}">{% if item.kind == 'Book' %}B{% else %}T{% endif %}</span><div><b>{{ item.title }}</b><p>{{ item.employee.employee_id }} · {{ item.employee.full_name }}</p></div><div class="activity-meta"><b>{{ item.time|date:'d M Y' }}</b><small>{{ item.time|date:'h:i:s A' }} · by {{ item.actor.employee_id|default:'System' }}</small></div></div>{% empty %}<div class="empty-state">No allocation activity yet.</div>{% endfor %}</div></section></div>
+  <div class="col-xl-4"><section class="content-card premium-card"><div class="section-title"><h2>Quick Operations</h2></div><div class="quick-stack"><a href="{% url 'inventory:book_list' %}"><span>01</span><b>Book Inventory</b><small>Allocate, return and print QR labels</small></a><a href="{% url 'inventory:employee_list' %}"><span>02</span><b>Employee 360°</b><small>Search mobile and view full history</small></a><a href="{% url 'inventory:tshirt_brand_list' %}"><span>03</span><b>Brand & Free Limits</b><small>Next Toppers, CUET, Nirmaan, Mission Jeet</small></a><a href="{% url 'inventory:reports' %}"><span>04</span><b>Reports Center</b><small>Excel and PDF operational exports</small></a></div></section></div>
+</div>
+{% if recent_audit %}<section class="content-card premium-card mt-4"><div class="section-title"><h2>Recent Audit Activity</h2></div><div class="table-responsive"><table class="table"><thead><tr><th>Time</th><th>User</th><th>Action</th><th>Description</th></tr></thead><tbody>{% for row in recent_audit %}<tr><td>{{ row.created_at|date:'d M Y, h:i:s A' }}</td><td>{{ row.actor|default:'System' }}</td><td><span class="status-pill">{{ row.action }}</span></td><td>{{ row.description }}</td></tr>{% endfor %}</tbody></table></div></section>{% endif %}
+{% endblock %}
+{% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script>
+const stockLabels={{ brand_chart_labels|safe }}, available={{ brand_available_data|safe }}, allocated={{ brand_allocated_data|safe }};
+new Chart(document.getElementById('stockChart'),{type:'bar',data:{labels:stockLabels,datasets:[{label:'Available',data:available,backgroundColor:'rgba(49,94,251,.75)',borderRadius:10},{label:'Allocated',data:allocated,backgroundColor:'rgba(39,196,245,.75)',borderRadius:10}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}},scales:{y:{beginAtZero:true,grid:{color:'rgba(30,54,110,.07)'}},x:{grid:{display:false}}}}});
+new Chart(document.getElementById('bookChart'),{type:'doughnut',data:{labels:['In Library','Allocated','Damaged','Lost'],datasets:[{data:{{ book_chart_data|safe }},backgroundColor:['#315efb','#27c4f5','#f59e0b','#df3651'],borderWidth:0,hoverOffset:12}]},options:{responsive:true,maintainAspectRatio:false,cutout:'68%',plugins:{legend:{position:'bottom'}}}});
+document.querySelectorAll('[data-count]').forEach(el=>{const target=parseInt(el.dataset.count||'0');let n=0;const step=Math.max(1,Math.ceil(target/28));const timer=setInterval(()=>{n=Math.min(target,n+step);el.textContent=n;if(n>=target)clearInterval(timer)},30)});
+</script>
 {% endblock %}
