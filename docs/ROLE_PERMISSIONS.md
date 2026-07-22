@@ -16,7 +16,7 @@ The Super Admin has full authority over the application, including:
 - Add, edit, delete, allocate and return inventory records
 - Access all Excel and PDF reports
 - Access the complete audit log
-- Manage system and branding settings
+- Manage all system and branding settings
 
 ## Admin
 
@@ -35,6 +35,11 @@ An Admin can:
 - Reset other Admin passwords through a secure reset process
 - Promote a Staff account to the Admin role
 - Demote an Admin account to Staff when authorized
+- Change the application logo
+- Change the login-page background image
+- Change the home-page image
+- Change the organization/profile picture
+- Preview and validate branding images before saving
 
 Admin restrictions and safeguards:
 
@@ -44,7 +49,7 @@ Admin restrictions and safeguards:
 - An Admin cannot view any user's existing password.
 - Password resets must use a temporary password or secure reset process and require the affected user to create a new password at the next sign-in.
 - At least one active Super Admin must always remain in the system.
-- Account and permission changes must be recorded in the audit log.
+- Account, permission and branding changes must be recorded in the audit log.
 
 ## Staff
 
@@ -55,6 +60,7 @@ Staff can:
 - Allocate Books and T-shirts to users
 - Receive returned Books and mark them **In Library**
 - Download all available Excel and PDF reports for Book and T-shirt inventory
+- Change their own profile picture, subject to image validation
 
 Staff cannot:
 
@@ -62,6 +68,7 @@ Staff cannot:
 - Delete T-shirt Inventory records
 - Create or manage user accounts
 - Change roles or permissions
+- Change the application logo, login background, home image or organization/profile picture
 - Manage system-level settings unless separately approved
 
 ## Audit Requirements
@@ -76,6 +83,9 @@ The audit log must record all important actions, including:
 - Account activation and deactivation
 - Role changes
 - Password-reset actions
+- Application logo changes
+- Login and home image changes
+- Organization/profile picture changes
 
 The audit log must include the acting user, affected user or inventory record, action, date and time. Passwords must never be stored in the audit log.
 
