@@ -36,6 +36,16 @@ This document records the confirmed employee/user master requirements for **Next
 - A blank full name must be blocked by both the user interface and backend validation.
 - The employee's full name must appear with the Employee ID in employee search, Book allocation and return records, T-shirt allocation and entitlement history, reports and audit records.
 
-## Pending Decision
+### Employee Mobile Number
 
-- Remaining employee/user master fields.
+- Every employee/user must have a mobile number.
+- Mobile number is mandatory when creating an employee/user record.
+- A blank or invalid mobile number must be blocked by both the user interface and backend validation.
+- The final country-code and duplicate-number rules will follow the approved business decisions.
+- Mobile numbers must be protected as personal data and displayed only to authorized users.
+
+## Pending Decisions
+
+- Remaining employee/user master fields and mobile-number validation rules.
+- T-shirt entitlement period and approval workflow.
+- Existing-data import, sample images and deployment details.
