@@ -34,19 +34,25 @@ The application must support these three roles:
 
 Access must use role-based access control so that every screen and action is permitted or blocked according to the signed-in user's role.
 
-### Confirmed Staff Permission
+### Confirmed Staff Permissions
 
 - Staff can add and edit Book Inventory and T-shirt Inventory records when permitted.
 - Staff cannot delete Book Inventory or T-shirt Inventory records.
 - Delete buttons and delete APIs must be blocked for Staff accounts.
+- Staff can download all available Excel and PDF reports for Book and T-shirt inventory.
+- Staff can allocate Books and T-shirts to users.
+- Every Staff allocation must update stock/status and be recorded in the audit log with the Staff user, recipient, item, quantity where applicable, date and time.
 
-### Confirmed Admin Permission
+### Confirmed Admin Permissions
 
 - Admin can delete Book Inventory and T-shirt Inventory records.
 - Admin deletion must be protected by a confirmation step.
 - Each deletion must be recorded in the audit log with the Admin user, record type, record identifier, date and time.
 
-- Super Admin can delete records and has authority over role and permission management.
+### Confirmed Super Admin Permissions
+
+- Super Admin can delete records.
+- Super Admin has authority over role and permission management.
 
 The remaining detailed permissions for each role will be finalized separately.
 
@@ -94,10 +100,10 @@ Authorized users must be able to:
 - Add book records
 - Edit book records
 - Delete book records, except Staff users
-- Allocate books
-- Record returned books
-- Download/export book data to Excel
-- Download/export book data to PDF
+- Allocate books, including Staff users
+- Record returned books according to the final role-permission matrix
+- Download/export book data to Excel, including Staff users
+- Download/export book data to PDF, including Staff users
 
 ## 5. T-shirt Logo/Brand Master
 
@@ -149,6 +155,8 @@ The T-shirt allocation section must store:
 - Allocation date
 - Free or paid issue status
 
+Staff, Admin and Super Admin can allocate T-shirts according to their confirmed permissions.
+
 Each allocation must update stock automatically and appear in the user's full T-shirt history.
 
 ## 9. Annual Free T-shirt Entitlement
@@ -194,8 +202,9 @@ Authorized users must be able to:
 - Add records
 - Edit records
 - Delete records, except Staff users
-- Download/export data to Excel
-- Download/export data to PDF
+- Allocate T-shirts, including Staff users
+- Download/export all permitted data to Excel, including Staff users
+- Download/export all permitted data to PDF, including Staff users
 - View logo-wise free, used, remaining, paid and total counts
 - View complete user-wise allocation and purchase history
 
