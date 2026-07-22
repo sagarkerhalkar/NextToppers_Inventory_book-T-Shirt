@@ -41,7 +41,8 @@ Access must use role-based access control so that every screen and action is per
 - Delete buttons and delete APIs must be blocked for Staff accounts.
 - Staff can download all available Excel and PDF reports for Book and T-shirt inventory.
 - Staff can allocate Books and T-shirts to users.
-- Every Staff allocation must update stock/status and be recorded in the audit log with the Staff user, recipient, item, quantity where applicable, date and time.
+- Staff can receive returned books and mark them as **In Library**.
+- Every Staff allocation or book-return action must update stock/status and be recorded in the audit log with the Staff user, recipient where applicable, item, quantity where applicable, return date where applicable, date and time.
 
 ### Confirmed Admin Permissions
 
@@ -101,9 +102,12 @@ Authorized users must be able to:
 - Edit book records
 - Delete book records, except Staff users
 - Allocate books, including Staff users
-- Record returned books according to the final role-permission matrix
+- Receive returned books and mark them **In Library**, including Staff users
+- Save the return date and clear or close the active allocation as applicable
 - Download/export book data to Excel, including Staff users
 - Download/export book data to PDF, including Staff users
+
+Every book return must be recorded in the book history and audit log without deleting the earlier allocation history.
 
 ## 5. T-shirt Logo/Brand Master
 
