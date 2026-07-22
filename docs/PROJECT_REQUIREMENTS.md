@@ -14,7 +14,7 @@ The supplied Next Toppers group image will be used as the initial visual backgro
 
 The supplied Next Toppers full logo will be used as the initial official application logo.
 
-The application must include an authorized Branding Settings area where the permitted administrator can change, when required:
+The application must include a Branding Settings area where authorized users can change:
 
 - Application logo
 - Login page background image
@@ -22,7 +22,16 @@ The application must include an authorized Branding Settings area where the perm
 - Organization/profile picture
 - Individual user profile picture
 
+Confirmed branding permissions:
+
+- Super Admin can manage all branding images.
+- Admin can change the application logo, login background, home image and organization/profile picture.
+- Staff cannot change organization-level branding.
+- Staff can change their own profile picture, subject to validation.
+
 Uploaded replacement images must be validated for supported file type and size, previewed before saving, and displayed responsively on mobile, tablet and desktop screens.
+
+Every organization-level branding change must be recorded in the audit log with the acting user, changed item, date and time.
 
 ## User Roles
 
@@ -42,6 +51,7 @@ Access must use role-based access control so that every screen and action is per
 - Staff can download all available Excel and PDF reports for Book and T-shirt inventory.
 - Staff can allocate Books and T-shirts to users.
 - Staff can receive returned books and mark them as **In Library**.
+- Staff can change their own profile picture.
 - Every Staff allocation or book-return action must update stock/status and be recorded in the audit log with the Staff user, recipient where applicable, item, quantity where applicable, return date where applicable, date and time.
 
 ### Confirmed Admin Permissions
@@ -54,17 +64,23 @@ Access must use role-based access control so that every screen and action is per
 - Admin can activate or deactivate Staff accounts.
 - A deactivated Staff account cannot sign in, but its past inventory actions and audit history must remain available.
 - Admin can reset a Staff account password.
-- Password reset must create a temporary password or secure reset process; the Admin must never be shown the Staff member's existing password.
-- The Staff member must be required to create a new password at the next sign-in after an Admin reset.
-- Every password reset must be recorded in the audit log with the Admin user, affected Staff account, date and time, but no password may be stored in the audit log.
-- Admin cannot reset, create, edit, deactivate, promote or delete Super Admin accounts.
-- Admin cannot give a Staff account the Admin or Super Admin role unless that permission is later explicitly approved.
-- Every Staff-account creation, edit, activation and deactivation must be recorded in the audit log.
+- Admin can create, edit, activate and deactivate other Admin accounts.
+- Admin can securely reset other Admin passwords.
+- Admin can promote Staff to Admin and demote Admin to Staff when authorized.
+- Admin can change the application logo, login background, home image and organization/profile picture.
+- Password reset must create a temporary password or secure reset process; the Admin must never be shown the user's existing password.
+- The affected user must be required to create a new password at the next sign-in after an Admin reset.
+- Every password reset must be recorded in the audit log with the acting Admin, affected account, date and time, but no password may be stored in the audit log.
+- Admin cannot reset, create, edit, deactivate, promote, demote or delete Super Admin accounts.
+- Admin cannot assign the Super Admin role.
+- Every account creation, edit, activation, deactivation, role change and branding change must be recorded in the audit log.
 
 ### Confirmed Super Admin Permissions
 
 - Super Admin can delete records.
-- Super Admin has authority over role and permission management.
+- Super Admin has full authority over role and permission management.
+- Super Admin can manage Super Admin, Admin and Staff accounts.
+- Super Admin can manage all system and branding settings.
 
 The remaining detailed permissions for each role will be finalized separately.
 
