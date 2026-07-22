@@ -3,7 +3,7 @@ from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
 
-from .forms import InventoryEmployeeForm, TshirtBrandForm
+from .forms import EmployeeRecordForm, TshirtBrandForm
 from .models import Book, TshirtBrand, TshirtStock, User
 from .permissions import role_required
 from .services import audit, free_entitlement
@@ -17,13 +17,9 @@ def book_detail(request, pk):
 
 @role_required(User.Role.ADMIN, User.Role.SUPER_ADMIN)
 def inventory_employee_create(request):
-    form = InventoryEmployeeForm(request.POST or None, request.FILES or None)
+    form = EmployeeRecordForm(request.POST or None, request.FILES or None)
     if request.method == "POST" and form.is_valid():
-        employee = form.save(commit=False)
-        employee.role = User.Role.STAFF
-        employee.is_active = True
-        employee.set_unusable_password()
-        employee.save()
+        employee = form.save()
         audit(request.user, "INVENTORY_EMPLOYEE_CREATED", employee, f"Created inventory-only employee {employee.employee_id}")
         messages.success(request, "Employee created for inventory records. Login access was not created.")
         return redirect("inventory:employee_detail", pk=employee.pk)
