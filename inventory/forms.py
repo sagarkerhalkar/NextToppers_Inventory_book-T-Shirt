@@ -3,7 +3,7 @@ from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 
-from .models import BrandingSettings, Book, TshirtAllocation, TshirtPurchase, TshirtStock, User
+from .models import BrandingSettings, Book, TshirtAllocation, TshirtBrand, TshirtPurchase, TshirtStock, User
 
 
 class StyledFormMixin:
@@ -26,6 +26,30 @@ class EmployeeCreateForm(StyledFormMixin, UserCreationForm):
         if actor and actor.role == User.Role.ADMIN:
             self.fields["role"].choices = [(User.Role.STAFF, "Staff"), (User.Role.ADMIN, "Admin")]
         self._style_fields()
+
+
+class EmployeeRecordForm(StyledFormMixin, forms.ModelForm):
+    """Creates an employee used only for inventory allocation/history, without login access."""
+
+    class Meta:
+        model = User
+        fields = ["employee_id", "full_name", "mobile_number", "email", "department", "designation", "joining_date", "office_location", "profile_picture", "default_tshirt_size"]
+        widgets = {"joining_date": forms.DateInput(attrs={"type": "date"})}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._style_fields()
+
+    def save(self, commit=True):
+        employee = super().save(commit=False)
+        employee.role = User.Role.STAFF
+        employee.is_staff = False
+        employee.must_change_password = False
+        employee.set_unusable_password()
+        if commit:
+            employee.save()
+            self.save_m2m()
+        return employee
 
 
 class EmployeeUpdateForm(StyledFormMixin, forms.ModelForm):
@@ -85,6 +109,17 @@ class BookAllocationForm(StyledFormMixin, forms.Form):
 class BookReturnForm(StyledFormMixin, forms.Form):
     return_condition = forms.ChoiceField(choices=Book.Condition.choices)
     return_note = forms.CharField(widget=forms.Textarea(attrs={"rows": 3}))
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._style_fields()
+
+
+class TshirtBrandForm(StyledFormMixin, forms.ModelForm):
+    class Meta:
+        model = TshirtBrand
+        fields = ["name", "free_quantity_rolling_12_months", "is_active"]
+        labels = {"free_quantity_rolling_12_months": "Free quantity per employee in rolling 12 months"}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
