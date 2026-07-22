@@ -34,4 +34,7 @@ try {
 } catch {
     Write-Warning "Could not create the scheduled backup task. Run PowerShell as Administrator and execute this setup again if required."
 }
+
+Write-Host "Running installation verification..." -ForegroundColor Cyan
+& .\scripts\verify_installation.ps1
 Write-Host "Setup complete. Run scripts\start_windows.ps1" -ForegroundColor Green
