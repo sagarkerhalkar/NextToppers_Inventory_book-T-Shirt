@@ -13,6 +13,7 @@
   <link rel="stylesheet" href="{% static 'inventory/app.css' %}">
   <link rel="stylesheet" href="{% static 'inventory/theme-teal.css' %}">
   <link rel="stylesheet" href="{% static 'inventory/typography.css' %}">
+  <link rel="stylesheet" href="{% static 'inventory/pagination.css' %}">
 </head>
 <body>
 <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div><div class="ambient ambient-three"></div>
@@ -43,6 +44,6 @@
 </main>
 <div id="saveOverlay" class="save-overlay" aria-hidden="true"><div class="save-overlay-card"><div class="smooth-spinner"></div><strong>Saving securely...</strong><span>Please wait. Do not click again.</span></div></div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script>(function(){const overlay=document.getElementById('saveOverlay');document.querySelectorAll('form[method="post"]').forEach(form=>{form.addEventListener('submit',()=>{if(!form.checkValidity())return;const button=form.querySelector('button[type="submit"]');if(button){button.disabled=true;const label=button.querySelector('.save-label');const working=button.querySelector('.save-working');if(label)label.classList.add('d-none');if(working)working.classList.remove('d-none');}if(overlay){overlay.classList.add('visible');overlay.setAttribute('aria-hidden','false');}});});window.addEventListener('pageshow',()=>{if(overlay){overlay.classList.remove('visible');overlay.setAttribute('aria-hidden','true');}document.querySelectorAll('button[type="submit"]').forEach(button=>button.disabled=false);});})();</script>
+<script>(function(){const overlay=document.getElementById('saveOverlay');document.querySelectorAll('form[method="post"]').forEach(form=>{form.addEventListener('submit',()=>{if(!form.checkValidity())return;const button=form.querySelector('button[type="submit"]');if(button){button.disabled=true;const label=button.querySelector('.save-label');const working=button.querySelector('.save-working');if(label)label.classList.add('d-none');if(working)working.classList.remove('d-none');}if(overlay){overlay.classList.add('visible');overlay.setAttribute('aria-hidden','false');}});});document.querySelectorAll('[data-page-size]').forEach(select=>{select.addEventListener('change',()=>{const url=new URL(window.location.href);const sizeParameter=select.dataset.sizeParameter||'page_size';const pageParameter=select.dataset.pageParameter||'page';url.searchParams.set(sizeParameter,select.value);url.searchParams.delete(pageParameter);window.location.assign(url.toString());});});window.addEventListener('pageshow',()=>{if(overlay){overlay.classList.remove('visible');overlay.setAttribute('aria-hidden','true');}document.querySelectorAll('button[type="submit"]').forEach(button=>button.disabled=false);});})();</script>
 {% block extra_scripts %}{% endblock %}
 </body></html>
