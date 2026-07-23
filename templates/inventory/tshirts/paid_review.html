@@ -1,0 +1,35 @@
+{% extends 'inventory/base.html' %}
+{% block title %}Review Paid T-shirt Request{% endblock %}
+{% block content %}
+<div class="hero-panel">
+  <div><span class="eyebrow">ADMIN DOCUMENT REVIEW</span><h1>Paid T-shirt Request</h1><p>Review payment and HR approval evidence before approving stock issue.</p></div>
+  <a class="btn btn-light" href="{% url 'inventory:tshirt_allocation_list' %}">Back to History</a>
+</div>
+<div class="content-card premium-card mt-4">
+  <div class="detail-grid">
+    <div class="detail-item"><small>Employee</small><strong>{{ allocation.recipient.employee_id }} · {{ allocation.recipient.full_name }}</strong></div>
+    <div class="detail-item"><small>T-shirt</small><strong>{{ allocation.stock.brand.name }} · Size {{ allocation.stock.size }}</strong></div>
+    <div class="detail-item"><small>Quantity</small><strong>{{ allocation.quantity }}</strong></div>
+    <div class="detail-item"><small>Status</small><strong>{{ allocation.get_status_display }}</strong></div>
+    <div class="detail-item"><small>Request / Entry Date</small><strong>{{ allocation.requested_at|date:'d M Y, h:i:s A' }}</strong></div>
+    <div class="detail-item"><small>Entered By</small><strong>{{ allocation.requested_by.employee_id|default:'-' }}</strong></div>
+    <div class="detail-item"><small>Payment Amount</small><strong>₹{{ allocation.payment_amount|default:'-' }}</strong></div>
+    <div class="detail-item"><small>Payment Date</small><strong>{{ allocation.payment_date|date:'d M Y'|default:'-' }}</strong></div>
+  </div>
+</div>
+<div class="row g-4 mt-1">
+  <div class="col-12 col-lg-6"><div class="document-card"><h3>Payment Proof</h3><p class="text-muted">Open the uploaded payment document in a protected tab.</p>{% if allocation.payment_proof %}<a target="_blank" class="btn btn-outline-primary" href="{% url 'inventory:paid_tshirt_document' allocation.pk 'payment' %}">View Payment Proof</a>{% else %}<div class="alert alert-danger mb-0">Payment proof is missing.</div>{% endif %}</div></div>
+  <div class="col-12 col-lg-6"><div class="document-card"><h3>HR Approval Proof</h3><p class="text-muted">Open the uploaded HR approval email, image or document.</p>{% if allocation.hr_approval_proof %}<a target="_blank" class="btn btn-outline-primary" href="{% url 'inventory:paid_tshirt_document' allocation.pk 'hr' %}">View HR Approval Proof</a>{% else %}<div class="alert alert-danger mb-0">HR approval proof is missing.</div>{% endif %}</div></div>
+</div>
+{% if allocation.status == 'PENDING' %}
+<div class="content-card premium-card mt-4">
+  <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between">
+    <div><h2 class="h5 mb-1">Decision</h2><p class="text-muted mb-0">Approve only after both documents and payment details are verified.</p></div>
+    <div class="d-flex gap-2">
+      <form method="post" action="{% url 'inventory:paid_tshirt_approve' allocation.pk %}" onsubmit="return confirm('Approve this paid T-shirt request and deduct stock?')">{% csrf_token %}<button class="btn btn-success">Approve and Issue</button></form>
+      <a class="btn btn-outline-danger" href="{% url 'inventory:paid_tshirt_reject' allocation.pk %}">Reject</a>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
