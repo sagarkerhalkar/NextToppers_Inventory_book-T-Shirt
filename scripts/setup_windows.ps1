@@ -41,8 +41,9 @@ if ($UserCount -eq 0) {
     $FullName = Read-Host "Full name"
     $Mobile = Read-Host "Mobile (+91XXXXXXXXXX)"
     $Email = Read-Host "Email (optional)"
-    $SecurePassword = Read-Host "Temporary password (minimum 10 characters)" -AsSecureString
+    $SecurePassword = Read-Host "Temporary password (minimum 4 characters)" -AsSecureString
     $Password = [System.Net.NetworkCredential]::new('', $SecurePassword).Password
+    if ($Password.Length -lt 4) { throw "Password must contain at least 4 characters." }
     & .\.venv\Scripts\python.exe manage.py bootstrap_system --employee-id $EmployeeId --full-name $FullName --mobile $Mobile --email $Email --password $Password
 } else { Write-Host "Existing login-user database found. Account creation was skipped." -ForegroundColor Yellow }
 $AppPath = (Get-Location).Path
