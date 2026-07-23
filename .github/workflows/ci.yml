@@ -8,6 +8,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         python-version: ["3.11", "3.12"]
     steps:
@@ -23,4 +24,15 @@ jobs:
       - run: python manage.py check
         env:
           DJANGO_SECRET_KEY: "ci-only-long-secret-key-that-is-not-used-in-production"
-      - run: python manage.py test
+      - name: Run Django tests
+        shell: bash
+        run: |
+          set -o pipefail
+          python manage.py test -v 2 2>&1 | tee test-output-${{ matrix.python-version }}.log
+      - name: Upload test output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: django-test-output-${{ matrix.python-version }}
+          path: test-output-${{ matrix.python-version }}.log
+          retention-days: 7
