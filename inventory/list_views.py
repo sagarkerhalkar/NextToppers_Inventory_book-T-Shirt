@@ -1,6 +1,6 @@
 from django.contrib.auth.decorators import login_required
 from django.db import models
-from django.db.models import Prefetch
+from django.db.models import Prefetch, Sum
 from django.shortcuts import get_object_or_404, render
 
 from .models import Book, BookAllocation, Employee, TshirtAllocation, TshirtBrand, TshirtStock, User
@@ -27,11 +27,7 @@ def book_list(request):
             | models.Q(stream_name__icontains=query)
         )
     pagination = paginate_queryset(request, books)
-    return render(request, "inventory/books/list.html", {
-        "books": pagination["page_obj"],
-        "query": query,
-        **pagination,
-    })
+    return render(request, "inventory/books/list.html", {"books": pagination["page_obj"], "query": query, **pagination})
 
 
 @login_required
@@ -48,11 +44,7 @@ def employee_list(request):
             | models.Q(designation__icontains=query)
         )
     pagination = paginate_queryset(request, employees)
-    return render(request, "inventory/employees/list.html", {
-        "employees": pagination["page_obj"],
-        "query": query,
-        **pagination,
-    })
+    return render(request, "inventory/employees/list.html", {"employees": pagination["page_obj"], "query": query, **pagination})
 
 
 @role_required(User.Role.ADMIN, User.Role.SUPER_ADMIN)
@@ -68,11 +60,7 @@ def login_user_list(request):
             | models.Q(role__icontains=query)
         )
     pagination = paginate_queryset(request, users)
-    return render(request, "inventory/users/list.html", {
-        "login_users": pagination["page_obj"],
-        "query": query,
-        **pagination,
-    })
+    return render(request, "inventory/users/list.html", {"login_users": pagination["page_obj"], "query": query, **pagination})
 
 
 @login_required
@@ -80,23 +68,15 @@ def tshirt_stock_list(request):
     stocks = TshirtStock.objects.select_related("brand").order_by("brand__name", "size")
     query = request.GET.get("q", "").strip()
     if query:
-        stocks = stocks.filter(
-            models.Q(brand__name__icontains=query)
-            | models.Q(size__icontains=query)
-        )
+        stocks = stocks.filter(models.Q(brand__name__icontains=query) | models.Q(size__icontains=query))
     pagination = paginate_queryset(request, stocks)
-    return render(request, "inventory/tshirts/stock_list.html", {
-        "stocks": pagination["page_obj"],
-        "query": query,
-        **pagination,
-    })
+    return render(request, "inventory/tshirts/stock_list.html", {"stocks": pagination["page_obj"], "query": query, **pagination})
 
 
 @login_required
 def tshirt_allocation_list(request):
     allocations = TshirtAllocation.objects.select_related(
-        "employee", "employee_record", "stock", "stock__brand",
-        "requested_by", "approved_by", "issued_by"
+        "employee", "employee_record", "stock", "stock__brand", "requested_by", "approved_by", "issued_by"
     ).order_by("-requested_at")
     query = request.GET.get("q", "").strip()
     if query:
@@ -111,11 +91,7 @@ def tshirt_allocation_list(request):
             | models.Q(issue_type__icontains=query)
         )
     pagination = paginate_queryset(request, allocations)
-    return render(request, "inventory/tshirts/allocation_list.html", {
-        "allocations": pagination["page_obj"],
-        "query": query,
-        **pagination,
-    })
+    return render(request, "inventory/tshirts/allocation_list.html", {"allocations": pagination["page_obj"], "query": query, **pagination})
 
 
 @login_required
@@ -134,23 +110,14 @@ def book_history(request):
             | models.Q(employee__full_name__icontains=query)
         )
     pagination = paginate_queryset(request, allocations)
-    return render(request, "inventory/books/history.html", {
-        "allocations": pagination["page_obj"],
-        "query": query,
-        **pagination,
-    })
+    return render(request, "inventory/books/history.html", {"allocations": pagination["page_obj"], "query": query, **pagination})
 
 
 @login_required
 def employee_history(request, pk):
     employee = get_object_or_404(Employee, pk=pk)
-
-    all_books = BookAllocation.objects.select_related("book", "allocated_by", "returned_by").filter(
-        employee_record=employee
-    ).order_by("-allocated_at")
-    all_tshirts = TshirtAllocation.objects.select_related(
-        "stock", "stock__brand", "requested_by", "issued_by", "approved_by"
-    ).filter(employee_record=employee).order_by("-requested_at")
+    all_books = BookAllocation.objects.select_related("book", "allocated_by", "returned_by").filter(employee_record=employee).order_by("-allocated_at")
+    all_tshirts = TshirtAllocation.objects.select_related("stock", "stock__brand", "requested_by", "issued_by", "approved_by").filter(employee_record=employee).order_by("-requested_at")
 
     book_query = request.GET.get("book_q", "").strip()
     if book_query:
@@ -169,12 +136,8 @@ def employee_history(request, pk):
             | models.Q(issue_type__icontains=tshirt_query)
         )
 
-    book_pagination = paginate_queryset(
-        request, all_books, page_parameter="book_page", size_parameter="book_page_size"
-    )
-    tshirt_pagination = paginate_queryset(
-        request, all_tshirts, page_parameter="tshirt_page", size_parameter="tshirt_page_size"
-    )
+    book_pagination = paginate_queryset(request, all_books, page_parameter="book_page", size_parameter="book_page_size")
+    tshirt_pagination = paginate_queryset(request, all_tshirts, page_parameter="tshirt_page", size_parameter="tshirt_page_size")
 
     full_book_history = BookAllocation.objects.filter(employee_record=employee)
     full_tshirt_history = TshirtAllocation.objects.filter(employee_record=employee)
@@ -182,6 +145,7 @@ def employee_history(request, pk):
         {"brand": brand, **free_entitlement(employee, brand)}
         for brand in TshirtBrand.objects.filter(is_active=True).order_by("name")
     ]
+    total_tshirts = full_tshirt_history.filter(status=TshirtAllocation.Status.ISSUED).aggregate(total=Sum("quantity"))["total"] or 0
 
     return render(request, "inventory/employees/history.html", {
         "employee": employee,
@@ -194,9 +158,7 @@ def employee_history(request, pk):
         "entitlement_rows": entitlement_rows,
         "book_transaction_count": full_book_history.count(),
         "open_books": full_book_history.filter(is_active=True).count(),
-        "total_tshirts": sum(
-            item.quantity for item in full_tshirt_history.filter(status=TshirtAllocation.Status.ISSUED)
-        ),
+        "total_tshirts": total_tshirts,
     })
 
 
@@ -207,8 +169,4 @@ def tshirt_brand_list(request):
     if query:
         brands = brands.filter(name__icontains=query)
     pagination = paginate_queryset(request, brands)
-    return render(request, "inventory/tshirts/brand_list.html", {
-        "brands": pagination["page_obj"],
-        "query": query,
-        **pagination,
-    })
+    return render(request, "inventory/tshirts/brand_list.html", {"brands": pagination["page_obj"], "query": query, **pagination})
