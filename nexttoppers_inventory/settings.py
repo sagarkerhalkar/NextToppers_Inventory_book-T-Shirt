@@ -1,9 +1,31 @@
 import os
 from pathlib import Path
+
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
+
+
+def _default_local_data_dir():
+    if os.name == "nt" and os.getenv("LOCALAPPDATA"):
+        return Path(os.environ["LOCALAPPDATA"]) / "NextToppersInventory"
+    return BASE_DIR / "data"
+
+
+def _resolve_path(env_name, fallback):
+    raw = os.getenv(env_name, "").strip()
+    path = Path(os.path.expandvars(raw)).expanduser() if raw else Path(fallback)
+    if not path.is_absolute():
+        path = BASE_DIR / path
+    return path.resolve()
+
+
+LOCAL_DATA_DIR = _default_local_data_dir()
+DATABASE_FILE = _resolve_path("DATABASE_PATH", LOCAL_DATA_DIR / "data" / "db.sqlite3")
+MEDIA_DIRECTORY = _resolve_path("MEDIA_PATH", LOCAL_DATA_DIR / "media")
+DATABASE_FILE.parent.mkdir(parents=True, exist_ok=True)
+MEDIA_DIRECTORY.mkdir(parents=True, exist_ok=True)
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "development-only-change-me")
 DEBUG = os.getenv("DJANGO_DEBUG", "True").lower() == "true"
@@ -38,14 +60,12 @@ TEMPLATES = [{
     "BACKEND": "django.template.backends.django.DjangoTemplates",
     "DIRS": [BASE_DIR / "templates"],
     "APP_DIRS": True,
-    "OPTIONS": {
-        "context_processors": [
-            "django.template.context_processors.request",
-            "django.contrib.auth.context_processors.auth",
-            "django.contrib.messages.context_processors.messages",
-            "inventory.context_processors.branding",
-        ],
-    },
+    "OPTIONS": {"context_processors": [
+        "django.template.context_processors.request",
+        "django.contrib.auth.context_processors.auth",
+        "django.contrib.messages.context_processors.messages",
+        "inventory.context_processors.branding",
+    ]},
 }]
 WSGI_APPLICATION = "nexttoppers_inventory.wsgi.application"
 ASGI_APPLICATION = "nexttoppers_inventory.asgi.application"
@@ -53,7 +73,8 @@ ASGI_APPLICATION = "nexttoppers_inventory.asgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / os.getenv("DATABASE_PATH", "db.sqlite3"),
+        "NAME": DATABASE_FILE,
+        "CONN_MAX_AGE": 60,
         "OPTIONS": {"timeout": 30},
     }
 }
@@ -80,7 +101,7 @@ STORAGES = {
     "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
 }
 MEDIA_URL = "media/"
-MEDIA_ROOT = BASE_DIR / "media"
+MEDIA_ROOT = MEDIA_DIRECTORY
 
 LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "inventory:dashboard"
@@ -94,7 +115,7 @@ EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "True").lower() == "true"
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "inventory@nexttoppers.local")
 GOOGLE_CHAT_WEBHOOK_URL = os.getenv("GOOGLE_CHAT_WEBHOOK_URL", "")
-BACKUP_DIRECTORY = BASE_DIR / os.getenv("BACKUP_DIRECTORY", "backups")
+BACKUP_DIRECTORY = _resolve_path("BACKUP_DIRECTORY", BASE_DIR / "backups")
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 FILE_UPLOAD_MAX_MEMORY_SIZE = 8 * 1024 * 1024
