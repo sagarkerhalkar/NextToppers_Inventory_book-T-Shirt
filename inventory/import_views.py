@@ -18,13 +18,13 @@ TEMPLATES = {
         "filename": "employee_import_template.xlsx",
         "sheet": "Employees",
         "headers": ["employee_id", "full_name", "mobile_number", "default_tshirt_size", "email", "department", "designation", "joining_date", "office_location", "notes"],
-        "example": ["NXTTP0043", "Example Employee", "+919876543210", "L", "employee@example.com", "", "", "2026-07-22", "", "Non-login employee record"],
+        "example": ["NXTTP0043", "Example Employee", "", "L", "employee@example.com", "", "", "2026-07-22", "", "Mobile number is optional"],
     },
     "books": {
         "filename": "book_import_template.xlsx",
         "sheet": "Books",
-        "headers": ["asset_id", "book_name", "class_name", "stream_name", "isbn", "purchase_date", "bill_number", "condition"],
-        "example": ["", "Physics Part 1", "11", "Science", "9780000000000", "2026-07-22", "BILL-001", "GOOD"],
+        "headers": ["asset_id", "book_name", "publication_name", "subject", "class_name", "stream_name", "isbn", "purchase_date", "bill_number", "condition"],
+        "example": ["", "Physics Part 1", "NCERT", "Physics", "11", "Science", "9780000000000", "2026-07-22", "BILL-001", "GOOD"],
     },
     "tshirts": {
         "filename": "tshirt_stock_import_template.xlsx",
