@@ -60,8 +60,8 @@ class EmployeeRecordForm(StyledFormMixin, forms.ModelForm):
 
 
 class AdminPasswordResetForm(StyledFormMixin, forms.Form):
-    new_password = forms.CharField(widget=forms.PasswordInput, min_length=10)
-    confirm_password = forms.CharField(widget=forms.PasswordInput, min_length=10)
+    new_password = forms.CharField(widget=forms.PasswordInput, min_length=4)
+    confirm_password = forms.CharField(widget=forms.PasswordInput, min_length=4)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
