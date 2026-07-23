@@ -83,12 +83,24 @@ class AdminPasswordResetForm(StyledFormMixin, forms.Form):
 class BookForm(StyledFormMixin, forms.ModelForm):
     class Meta:
         model = Book
-        fields = ["name", "class_name", "stream_name", "isbn", "purchase_date", "bill_number", "bill_photo", "book_photo", "condition"]
-        widgets = {"purchase_date": forms.DateInput(attrs={"type": "date"})}
+        fields = ["asset_id", "name", "class_name", "stream_name", "isbn", "purchase_date", "bill_number", "bill_photo", "book_photo", "condition"]
+        widgets = {
+            "purchase_date": forms.DateInput(attrs={"type": "date"}),
+            "asset_id": forms.TextInput(attrs={"placeholder": "Example: NTB-0001"}),
+        }
+        labels = {"asset_id": "Custom Asset ID (optional)"}
+        help_texts = {
+            "asset_id": "Use 3–10 letters, numbers, hyphens or underscores. Leave blank for automatic BOOK000001 format."
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._style_fields()
+        if self.instance and self.instance.pk:
+            self.fields.pop("asset_id", None)
+
+    def clean_asset_id(self):
+        return (self.cleaned_data.get("asset_id") or "").strip().upper()
 
 
 class BookAllocationForm(StyledFormMixin, forms.Form):
