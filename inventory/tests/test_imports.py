@@ -32,11 +32,27 @@ class BulkImportTests(TestCase):
         self.assertTrue(Employee.objects.filter(employee_id="NXTTP0043").exists())
         self.assertFalse(User.objects.filter(employee_id="NXTTP0043").exists())
 
-    def test_book_import_generates_asset_id(self):
-        file = workbook_file(["book_name", "class_name", "condition"], [["Physics", "11", "GOOD"]])
+    def test_employee_import_allows_blank_mobile_number(self):
+        file = workbook_file(
+            ["employee_id", "full_name", "default_tshirt_size", "mobile_number"],
+            [["NXTTP0044", "Employee Without Mobile", "M", ""]],
+        )
+        result = import_employees(file, self.admin)
+        self.assertEqual(result.created, 1)
+        self.assertEqual(result.failed, 0)
+        self.assertIsNone(Employee.objects.get(employee_id="NXTTP0044").mobile_number)
+
+    def test_book_import_generates_asset_id_and_saves_metadata(self):
+        file = workbook_file(
+            ["book_name", "publication_name", "subject", "class_name", "condition"],
+            [["Physics", "NCERT", "Physics", "11", "GOOD"]],
+        )
         result = import_books(file, self.admin)
         self.assertEqual(result.created, 1)
-        self.assertRegex(Book.objects.get(name="Physics").asset_id, r"^BOOK\d{6}$")
+        book = Book.objects.get(name="Physics")
+        self.assertRegex(book.asset_id, r"^BOOK\d{6}$")
+        self.assertEqual(book.publication_name, "NCERT")
+        self.assertEqual(book.subject, "Physics")
 
     def test_tshirt_import_updates_stock_and_purchase_history(self):
         file = workbook_file(["brand", "size", "quantity", "free_allowance", "low_stock_threshold"], [["Next Toppers", "L", 25, 5, 4]])
