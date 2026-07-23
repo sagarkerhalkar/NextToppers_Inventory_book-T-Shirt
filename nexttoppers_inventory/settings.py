@@ -1,4 +1,5 @@
 import os
+import socket
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -21,6 +22,18 @@ def _resolve_path(env_name, fallback):
     return path.resolve()
 
 
+def _local_ipv4_hosts():
+    hosts = {"127.0.0.1", "localhost"}
+    try:
+        for item in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+            address = item[4][0]
+            if address:
+                hosts.add(address)
+    except OSError:
+        pass
+    return hosts
+
+
 LOCAL_DATA_DIR = _default_local_data_dir()
 DATABASE_FILE = _resolve_path("DATABASE_PATH", LOCAL_DATA_DIR / "data" / "db.sqlite3")
 MEDIA_DIRECTORY = _resolve_path("MEDIA_PATH", LOCAL_DATA_DIR / "media")
@@ -29,8 +42,11 @@ MEDIA_DIRECTORY.mkdir(parents=True, exist_ok=True)
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "development-only-change-me")
 DEBUG = os.getenv("DJANGO_DEBUG", "True").lower() == "true"
-ALLOWED_HOSTS = [x.strip() for x in os.getenv("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost").split(",") if x.strip()]
-CSRF_TRUSTED_ORIGINS = [x.strip() for x in os.getenv("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",") if x.strip()]
+_configured_hosts = {x.strip() for x in os.getenv("DJANGO_ALLOWED_HOSTS", "").split(",") if x.strip()}
+ALLOWED_HOSTS = sorted(_configured_hosts | _local_ipv4_hosts())
+_configured_origins = {x.strip() for x in os.getenv("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",") if x.strip()}
+_lan_origins = {f"http://{host}:3458" for host in _local_ipv4_hosts()}
+CSRF_TRUSTED_ORIGINS = sorted(_configured_origins | _lan_origins)
 
 INSTALLED_APPS = [
     "django.contrib.admin",
