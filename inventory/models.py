@@ -57,10 +57,6 @@ class User(AbstractUser):
         self.employee_id = (self.employee_id or "").upper().strip()
         self.mobile_number = (self.mobile_number or "").strip()
         self.full_name = (self.full_name or "").strip()
-        if self.pk:
-            old_id = type(self).objects.filter(pk=self.pk).values_list("employee_id", flat=True).first()
-            if old_id and old_id != self.employee_id:
-                raise ValidationError("Login User ID cannot be changed after the account is created.")
         if self.role in {self.Role.ADMIN, self.Role.SUPER_ADMIN}:
             self.is_staff = True
         elif not self.is_superuser:
@@ -80,7 +76,13 @@ class Employee(TimeStampedModel):
 
     employee_id = models.CharField(max_length=9, unique=True, validators=[validate_employee_id])
     full_name = models.CharField(max_length=180)
-    mobile_number = models.CharField(max_length=13, unique=True, validators=[validate_indian_mobile])
+    mobile_number = models.CharField(
+        max_length=13,
+        unique=True,
+        null=True,
+        blank=True,
+        validators=[validate_indian_mobile],
+    )
     email = models.EmailField(blank=True)
     department = models.CharField(max_length=120, blank=True)
     designation = models.CharField(max_length=120, blank=True)
@@ -97,12 +99,8 @@ class Employee(TimeStampedModel):
 
     def save(self, *args, **kwargs):
         self.employee_id = (self.employee_id or "").upper().strip()
-        self.mobile_number = (self.mobile_number or "").strip()
+        self.mobile_number = (self.mobile_number or "").strip() or None
         self.full_name = (self.full_name or "").strip()
-        if self.pk:
-            old_id = type(self).objects.filter(pk=self.pk).values_list("employee_id", flat=True).first()
-            if old_id and old_id != self.employee_id:
-                raise ValidationError("Employee ID cannot be changed after the employee record is created.")
         self.full_clean()
         super().save(*args, **kwargs)
 
@@ -156,6 +154,8 @@ class Book(TimeStampedModel):
 
     asset_id = models.CharField(max_length=10, unique=True, blank=True, validators=[validate_book_asset_id])
     name = models.CharField(max_length=240)
+    publication_name = models.CharField(max_length=180, blank=True)
+    subject = models.CharField(max_length=180, blank=True)
     class_name = models.CharField(max_length=80, blank=True)
     stream_name = models.CharField(max_length=100, blank=True)
     isbn = models.CharField(max_length=32, blank=True, db_index=True)
@@ -173,10 +173,7 @@ class Book(TimeStampedModel):
         indexes = [models.Index(fields=["name", "class_name", "stream_name"])]
 
     def save(self, *args, **kwargs):
-        if self.pk:
-            old_asset = type(self).objects.filter(pk=self.pk).values_list("asset_id", flat=True).first()
-            if old_asset and self.asset_id and old_asset != self.asset_id:
-                raise ValidationError("Book Asset ID cannot be changed.")
+        self.asset_id = (self.asset_id or "").strip().upper()
         if self.condition == self.Condition.LOST:
             self.status = self.Status.LOST
         elif self.condition == self.Condition.DAMAGED and self.status != self.Status.ALLOCATED:
