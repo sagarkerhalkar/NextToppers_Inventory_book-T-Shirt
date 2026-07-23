@@ -16,13 +16,16 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         UserModel = get_user_model()
         employee_id = options["employee_id"].upper().strip()
+        password = options["password"]
+        if len(password) < 4:
+            raise CommandError("Password must contain at least 4 characters.")
         if UserModel.objects.filter(employee_id=employee_id).exists():
             raise CommandError(f"Employee ID {employee_id} already exists.")
         UserModel.objects.create_superuser(
             employee_id=employee_id,
             full_name=options["full_name"],
             mobile_number=options["mobile"],
-            password=options["password"],
+            password=password,
             email=options["email"],
         )
         for name, allowance in [("Next Toppers", 5), ("Nirmaan", 5), ("CUET", 1), ("Mission Jeet", 0)]:
