@@ -19,9 +19,9 @@ def _excel_response(filename, sheet_name, headers, rows):
     sheet = workbook.active
     sheet.title = sheet_name[:31]
     sheet.append(headers)
-    header_fill = PatternFill("solid", fgColor="DCE6F1")
+    header_fill = PatternFill("solid", fgColor="0F766E")
     for cell in sheet[1]:
-        cell.font = Font(bold=True)
+        cell.font = Font(bold=True, color="FFFFFF")
         cell.fill = header_fill
     for row in rows:
         normalised = []
@@ -94,8 +94,20 @@ def _pdf_response(filename, title, headers, rows, widths=None):
 
 @login_required
 def export_employees_excel(request):
-    rows = Employee.objects.order_by("employee_id").values_list("employee_id", "full_name", "mobile_number", "email", "department", "designation", "joining_date", "office_location", "default_tshirt_size", "is_active", "notes")
-    return _excel_response("employee_master.xlsx", "Employees", ["Employee ID", "Full name", "Mobile", "Email", "Department", "Designation", "Joining date", "Office", "T-shirt size", "Active", "Notes"], rows)
+    rows = Employee.objects.order_by("employee_id").values_list(
+        "employee_id", "full_name", "mobile_number", "email", "department", "designation",
+        "joining_date", "office_location", "default_tshirt_size", "tshirt_entitlement_start_date",
+        "tshirt_entitlement_end_date", "is_active", "notes",
+    )
+    return _excel_response(
+        "employee_master.xlsx",
+        "Employees",
+        [
+            "Employee ID", "Full name", "Mobile", "Email", "Department", "Designation",
+            "Joining date", "Office", "T-shirt size", "Entitlement start", "Entitlement end", "Active", "Notes",
+        ],
+        rows,
+    )
 
 
 @login_required
@@ -103,8 +115,17 @@ def export_book_history_excel(request):
     rows = []
     for item in BookAllocation.objects.select_related("book", "employee", "employee_record", "allocated_by", "returned_by"):
         employee = item.recipient
-        rows.append((item.book.asset_id, item.book.name, employee.employee_id if employee else "", employee.full_name if employee else "", item.allocated_at, item.allocated_by.employee_id if item.allocated_by else "", item.returned_at, item.return_condition, item.return_note, item.returned_by.employee_id if item.returned_by else "", item.is_active))
-    return _excel_response("book_allocation_return_history.xlsx", "Book History", ["Asset ID", "Book", "Employee ID", "Employee", "Allocated at", "Allocated by", "Returned at", "Return condition", "Return note", "Returned by", "Active allocation"], rows)
+        rows.append((
+            item.book.asset_id, item.book.name, item.book.publication_name, item.book.subject,
+            employee.employee_id if employee else "", employee.full_name if employee else "",
+            item.allocated_at, item.allocated_by.employee_id if item.allocated_by else "", item.returned_at,
+            item.return_condition, item.return_note, item.returned_by.employee_id if item.returned_by else "", item.is_active,
+        ))
+    return _excel_response(
+        "book_allocation_return_history.xlsx", "Book History",
+        ["Asset ID", "Book", "Publication", "Subject", "Employee ID", "Employee", "Allocated at", "Allocated by", "Returned at", "Return condition", "Return note", "Returned by", "Active allocation"],
+        rows,
+    )
 
 
 @login_required
@@ -129,18 +150,26 @@ def export_tshirt_allocations_excel(request):
 def export_employee_history_excel(request, pk):
     employee = get_object_or_404(Employee, pk=pk)
     workbook = Workbook()
-    book_sheet = workbook.active
-    book_sheet.title = "Book History"
-    book_sheet.append(["Asset ID", "Book", "Allocated at", "Allocated by", "Returned at", "Returned by", "Condition", "Return note", "Status"])
+    summary = workbook.active
+    summary.title = "Employee Summary"
+    summary.append(["Employee ID", employee.employee_id])
+    summary.append(["Employee", employee.full_name])
+    summary.append(["Mobile", employee.mobile_number or ""])
+    summary.append(["T-shirt size", employee.default_tshirt_size])
+    summary.append(["Entitlement start", employee.tshirt_entitlement_start_date or "Rolling previous 12 months"])
+    summary.append(["Entitlement end", employee.tshirt_entitlement_end_date or "Rolling previous 12 months"])
+    book_sheet = workbook.create_sheet("Book History")
+    book_sheet.append(["Asset ID", "Book", "Publication", "Subject", "Allocated at", "Allocated by", "Returned at", "Returned by", "Condition", "Return note", "Status"])
     for item in employee.book_allocations.select_related("book", "allocated_by", "returned_by"):
-        book_sheet.append([item.book.asset_id, item.book.name, timezone.localtime(item.allocated_at).strftime("%d-%m-%Y %H:%M:%S") if item.allocated_at else "", item.allocated_by.employee_id if item.allocated_by else "", timezone.localtime(item.returned_at).strftime("%d-%m-%Y %H:%M:%S") if item.returned_at else "", item.returned_by.employee_id if item.returned_by else "", item.return_condition, item.return_note, "Currently Allocated" if item.is_active else "Returned"])
+        book_sheet.append([item.book.asset_id, item.book.name, item.book.publication_name, item.book.subject, timezone.localtime(item.allocated_at).strftime("%d-%m-%Y %H:%M:%S") if item.allocated_at else "", item.allocated_by.employee_id if item.allocated_by else "", timezone.localtime(item.returned_at).strftime("%d-%m-%Y %H:%M:%S") if item.returned_at else "", item.returned_by.employee_id if item.returned_by else "", item.return_condition, item.return_note, "Currently Allocated" if item.is_active else "Returned"])
     tshirt_sheet = workbook.create_sheet("T-shirt History")
     tshirt_sheet.append(["Brand", "Size", "Quantity", "Type", "Status", "Requested at", "Issued at", "Issued by"])
     for item in employee.tshirt_allocations.select_related("stock", "stock__brand", "issued_by"):
         tshirt_sheet.append([item.stock.brand.name, item.stock.size, item.quantity, item.issue_type, item.status, timezone.localtime(item.requested_at).strftime("%d-%m-%Y %H:%M:%S") if item.requested_at else "", timezone.localtime(item.issued_at).strftime("%d-%m-%Y %H:%M:%S") if item.issued_at else "", item.issued_by.employee_id if item.issued_by else ""])
     for sheet in workbook.worksheets:
         for cell in sheet[1]:
-            cell.font = Font(bold=True)
+            cell.font = Font(bold=True, color="FFFFFF")
+            cell.fill = PatternFill("solid", fgColor="0F766E")
         sheet.freeze_panes = "A2"
         for column in sheet.columns:
             width = max(len(str(cell.value or "")) for cell in column) + 2
