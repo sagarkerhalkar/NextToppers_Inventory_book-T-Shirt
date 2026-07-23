@@ -60,3 +60,24 @@ class TshirtStockThresholdForm(StyledFormMixin, forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._style_fields()
+
+
+class TshirtStockCorrectionForm(StyledFormMixin, forms.Form):
+    available_quantity = forms.IntegerField(min_value=0, label="Correct Available Quantity")
+    correction_reason = forms.CharField(
+        label="Correction Reason",
+        widget=forms.Textarea(attrs={"rows": 3}),
+        help_text="Required for audit history. Example: Wrong opening entry, physical count correction or missed purchase entry.",
+    )
+
+    def __init__(self, *args, stock=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if stock is not None and not self.is_bound:
+            self.fields["available_quantity"].initial = stock.available_quantity
+        self._style_fields()
+
+    def clean_correction_reason(self):
+        reason = (self.cleaned_data.get("correction_reason") or "").strip()
+        if len(reason) < 3:
+            raise forms.ValidationError("Enter a clear correction reason.")
+        return reason
