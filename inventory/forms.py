@@ -26,17 +26,24 @@ class LoginUserCreateForm(StyledFormMixin, UserCreationForm):
             self.fields["role"].choices = [(User.Role.STAFF, "Data Entry User"), (User.Role.ADMIN, "Admin")]
         self._style_fields()
 
+    def clean_employee_id(self):
+        return (self.cleaned_data.get("employee_id") or "").strip().upper()
+
 
 class LoginUserUpdateForm(StyledFormMixin, forms.ModelForm):
     class Meta:
         model = User
-        fields = ["full_name", "mobile_number", "email", "role", "department", "designation", "office_location", "profile_picture", "is_active"]
+        fields = ["employee_id", "full_name", "mobile_number", "email", "role", "department", "designation", "office_location", "profile_picture", "is_active"]
+        help_texts = {"employee_id": "Correct this ID when it was entered by mistake. It must remain unique."}
 
     def __init__(self, *args, actor=None, **kwargs):
         super().__init__(*args, **kwargs)
         if actor and actor.role == User.Role.ADMIN:
             self.fields["role"].choices = [(User.Role.STAFF, "Data Entry User"), (User.Role.ADMIN, "Admin")]
         self._style_fields()
+
+    def clean_employee_id(self):
+        return (self.cleaned_data.get("employee_id") or "").strip().upper()
 
 
 EmployeeCreateForm = LoginUserCreateForm
@@ -51,12 +58,20 @@ class EmployeeRecordForm(StyledFormMixin, forms.ModelForm):
             "joining_date", "office_location", "profile_picture", "default_tshirt_size", "is_active", "notes",
         ]
         widgets = {"joining_date": forms.DateInput(attrs={"type": "date"}), "notes": forms.Textarea(attrs={"rows": 3})}
+        help_texts = {
+            "employee_id": "This ID can be corrected later when it was entered by mistake.",
+            "mobile_number": "Optional. When entered, use +91 followed by the 10-digit Indian mobile number.",
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._style_fields()
-        if self.instance and self.instance.pk:
-            self.fields.pop("employee_id", None)
+
+    def clean_employee_id(self):
+        return (self.cleaned_data.get("employee_id") or "").strip().upper()
+
+    def clean_mobile_number(self):
+        return (self.cleaned_data.get("mobile_number") or "").strip() or None
 
 
 class AdminPasswordResetForm(StyledFormMixin, forms.Form):
@@ -83,21 +98,29 @@ class AdminPasswordResetForm(StyledFormMixin, forms.Form):
 class BookForm(StyledFormMixin, forms.ModelForm):
     class Meta:
         model = Book
-        fields = ["asset_id", "name", "class_name", "stream_name", "isbn", "purchase_date", "bill_number", "bill_photo", "book_photo", "condition"]
+        fields = [
+            "asset_id", "name", "publication_name", "subject", "class_name", "stream_name",
+            "isbn", "purchase_date", "bill_number", "bill_photo", "book_photo", "condition",
+        ]
         widgets = {
             "purchase_date": forms.DateInput(attrs={"type": "date"}),
             "asset_id": forms.TextInput(attrs={"placeholder": "Example: NTB-0001"}),
         }
-        labels = {"asset_id": "Custom Asset ID (optional)"}
+        labels = {
+            "asset_id": "Book Number / Asset ID",
+            "publication_name": "Publication Name",
+            "subject": "Subject",
+        }
         help_texts = {
-            "asset_id": "Use 3–10 letters, numbers, hyphens or underscores. Leave blank for automatic BOOK000001 format."
+            "asset_id": "Use 3–10 letters, numbers, hyphens or underscores. Leave blank during creation for automatic BOOK000001 format. The number can be corrected later.",
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._style_fields()
         if self.instance and self.instance.pk:
-            self.fields.pop("asset_id", None)
+            self.fields["asset_id"].required = True
+            self.fields["asset_id"].help_text = "Correct the Book Number / Asset ID here when it was entered by mistake. It must remain unique."
+        self._style_fields()
 
     def clean_asset_id(self):
         return (self.cleaned_data.get("asset_id") or "").strip().upper()
