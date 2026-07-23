@@ -107,15 +107,15 @@ def import_employees(uploaded_file, actor):
     for row_number, record in _rows(uploaded_file):
         result.total_rows += 1
         try:
-            _require_columns(record, ["employee_id", "full_name", "mobile_number", "default_tshirt_size"])
+            _require_columns(record, ["employee_id", "full_name", "default_tshirt_size"])
             employee_id = str(record["employee_id"]).upper()
-            mobile = str(record["mobile_number"])
+            mobile = str(record.get("mobile_number") or "").strip() or None
             size = str(record["default_tshirt_size"]).upper()
             if size not in valid_sizes:
                 raise ValueError(f"Invalid T-shirt size '{size}'.")
             if Employee.objects.filter(employee_id=employee_id).exists():
                 raise ValueError(f"Employee ID {employee_id} already exists.")
-            if Employee.objects.filter(mobile_number=mobile).exists():
+            if mobile and Employee.objects.filter(mobile_number=mobile).exists():
                 raise ValueError(f"Mobile number {mobile} already exists.")
             with transaction.atomic():
                 employee = Employee(
@@ -153,7 +153,19 @@ def import_books(uploaded_file, actor):
             if condition not in valid_conditions:
                 raise ValueError(f"Invalid Book condition '{condition}'.")
             with transaction.atomic():
-                book = Book(asset_id=asset_id, name=str(record["book_name"]), class_name=str(record.get("class_name") or ""), stream_name=str(record.get("stream_name") or ""), isbn=str(record.get("isbn") or ""), purchase_date=_date_value(record.get("purchase_date")), bill_number=str(record.get("bill_number") or ""), condition=condition, created_by=actor)
+                book = Book(
+                    asset_id=asset_id,
+                    name=str(record["book_name"]),
+                    publication_name=str(record.get("publication_name") or ""),
+                    subject=str(record.get("subject") or ""),
+                    class_name=str(record.get("class_name") or ""),
+                    stream_name=str(record.get("stream_name") or ""),
+                    isbn=str(record.get("isbn") or ""),
+                    purchase_date=_date_value(record.get("purchase_date")),
+                    bill_number=str(record.get("bill_number") or ""),
+                    condition=condition,
+                    created_by=actor,
+                )
                 book.full_clean(exclude=["asset_id"] if not asset_id else None)
                 book.save()
                 audit(actor, "BOOK_IMPORTED", book, f"Imported {book.asset_id} from Excel")
