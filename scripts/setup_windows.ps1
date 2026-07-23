@@ -50,6 +50,8 @@ $BackupScript = Join-Path $AppPath "scripts\backup_database.ps1"
 $Action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$BackupScript`""
 $Trigger = New-ScheduledTaskTrigger -Daily -At 2:00AM
 try { Register-ScheduledTask -TaskName "NextToppersInventoryDailyBackup" -Action $Action -Trigger $Trigger -Description "Daily Next Toppers inventory database backup" -Force | Out-Null } catch { Write-Warning "Automatic backup task was not created. Local testing can continue." }
+Write-Host "Enabling automatic server startup after Windows login..." -ForegroundColor Cyan
+& .\scripts\enable_auto_start.ps1
 Write-Host "Running installation verification..." -ForegroundColor Cyan
 & .\scripts\verify_installation.ps1
-Write-Host "Setup completed successfully. Double-click START_LOCAL_TEST.bat." -ForegroundColor Green
+Write-Host "Setup completed successfully. The server will start automatically after Windows login." -ForegroundColor Green
