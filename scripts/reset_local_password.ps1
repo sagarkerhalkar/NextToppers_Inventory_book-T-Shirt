@@ -15,13 +15,13 @@ if ($EmployeeId -notmatch '^NXTTP\d{4}$') {
     throw "Invalid Employee ID. Use NXTTP followed by exactly four digits."
 }
 
-$SecurePassword = Read-Host "New password (minimum 10 characters)" -AsSecureString
+$SecurePassword = Read-Host "New password (minimum 4 characters)" -AsSecureString
 $SecureConfirm = Read-Host "Enter the new password again" -AsSecureString
 $Password = [System.Net.NetworkCredential]::new('', $SecurePassword).Password
 $ConfirmPassword = [System.Net.NetworkCredential]::new('', $SecureConfirm).Password
 
-if ($Password.Length -lt 10) {
-    throw "Password must contain at least 10 characters."
+if ($Password.Length -lt 4) {
+    throw "Password must contain at least 4 characters."
 }
 if ($Password -ne $ConfirmPassword) {
     throw "The two passwords do not match."
