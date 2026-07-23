@@ -1,9 +1,11 @@
+import calendar
 from datetime import date, datetime, time, timedelta
 from io import BytesIO
 
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q
 from django.http import HttpResponse, HttpResponseBadRequest
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
@@ -13,7 +15,7 @@ from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
-from .models import BookAllocation, TshirtAllocation
+from .models import BookAllocation, Employee, TshirtAllocation
 
 TEAL = "0F766E"
 DARK_GRAY = "263238"
@@ -59,7 +61,7 @@ def _parse_date(value, name):
         raise ValueError(f"{name} must use YYYY-MM-DD format.") from exc
 
 
-def _period(period_name, start_value="", end_value=""):
+def _period(period_name, start_value="", end_value="", month_value="", year_value=""):
     today = timezone.localdate()
     definitions = {
         "month": (today.replace(day=1), today, "Current month"),
@@ -74,20 +76,40 @@ def _period(period_name, start_value="", end_value=""):
         start_date = _parse_date(start_value, "Start date")
         end_date = _parse_date(end_value, "End date")
         label = "Custom period"
+    elif period_name == "calendar_month":
+        try:
+            selected = datetime.strptime(month_value, "%Y-%m").date()
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Select a month using YYYY-MM format.") from exc
+        start_date = selected.replace(day=1)
+        end_date = selected.replace(day=calendar.monthrange(selected.year, selected.month)[1])
+        label = selected.strftime("Calendar month — %B %Y")
+    elif period_name == "calendar_year":
+        try:
+            selected_year = int(year_value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Enter a valid four-digit year.") from exc
+        if selected_year < 2000 or selected_year > today.year:
+            raise ValueError(f"Year must be between 2000 and {today.year}.")
+        start_date = date(selected_year, 1, 1)
+        end_date = date(selected_year, 12, 31)
+        label = f"Calendar year — {selected_year}"
     elif period_name in definitions:
         start_date, end_date, label = definitions[period_name]
     else:
         raise ValueError("Unknown report period.")
     if start_date > end_date:
         raise ValueError("Start date cannot be after end date.")
+    if end_date > today:
+        end_date = today
     tz = timezone.get_current_timezone()
     start_dt = timezone.make_aware(datetime.combine(start_date, time.min), tz)
     end_dt = timezone.make_aware(datetime.combine(end_date + timedelta(days=1), time.min), tz)
     return start_date, end_date, start_dt, end_dt, label
 
 
-def _book_queryset(start_dt, end_dt):
-    return (
+def _book_queryset(start_dt, end_dt, employee=None):
+    queryset = (
         BookAllocation.objects.select_related(
             "book", "employee", "employee_record", "allocated_by", "returned_by"
         )
@@ -97,10 +119,13 @@ def _book_queryset(start_dt, end_dt):
         )
         .order_by("-allocated_at")
     )
+    if employee is not None:
+        queryset = queryset.filter(employee_record=employee)
+    return queryset
 
 
-def _tshirt_queryset(start_dt, end_dt):
-    return (
+def _tshirt_queryset(start_dt, end_dt, employee=None):
+    queryset = (
         TshirtAllocation.objects.select_related(
             "employee", "employee_record", "stock", "stock__brand", "requested_by", "issued_by"
         )
@@ -110,6 +135,9 @@ def _tshirt_queryset(start_dt, end_dt):
         )
         .order_by("-requested_at")
     )
+    if employee is not None:
+        queryset = queryset.filter(employee_record=employee)
+    return queryset
 
 
 def _book_rows(queryset):
@@ -119,6 +147,8 @@ def _book_rows(queryset):
         rows.append((
             item.book.asset_id,
             item.book.name,
+            item.book.publication_name,
+            item.book.subject,
             employee.employee_id if employee else "",
             employee.full_name if employee else "",
             item.allocated_at,
@@ -161,7 +191,7 @@ def _pdf_table(data, widths):
         ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#B0BEC5")),
         ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#E8F5F3")]),
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, -1), 6.5),
+        ("FONTSIZE", (0, 0), (-1, -1), 6.2),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("LEFTPADDING", (0, 0), (-1, -1), 4),
         ("RIGHTPADDING", (0, 0), (-1, -1), 4),
@@ -174,22 +204,33 @@ def download_activity_report(request):
     report_type = request.GET.get("report_type", "combined")
     period_name = request.GET.get("period", "month")
     output_format = request.GET.get("format", "xlsx")
+    employee_value = request.GET.get("employee", "").strip()
     if report_type not in {"book", "tshirt", "combined"}:
         return HttpResponseBadRequest("Unknown report type.")
     if output_format not in {"xlsx", "pdf"}:
         return HttpResponseBadRequest("Unknown report format.")
+    employee = None
+    if employee_value:
+        try:
+            employee = get_object_or_404(Employee, pk=int(employee_value))
+        except (TypeError, ValueError):
+            return HttpResponseBadRequest("Invalid employee selection.")
     try:
         start_date, end_date, start_dt, end_dt, label = _period(
             period_name,
             request.GET.get("start_date", ""),
             request.GET.get("end_date", ""),
+            request.GET.get("month", ""),
+            request.GET.get("year", ""),
         )
     except ValueError as exc:
         return HttpResponseBadRequest(str(exc))
 
-    books = _book_rows(_book_queryset(start_dt, end_dt)) if report_type in {"book", "combined"} else []
-    tshirts = _tshirt_rows(_tshirt_queryset(start_dt, end_dt)) if report_type in {"tshirt", "combined"} else []
+    books = _book_rows(_book_queryset(start_dt, end_dt, employee)) if report_type in {"book", "combined"} else []
+    tshirts = _tshirt_rows(_tshirt_queryset(start_dt, end_dt, employee)) if report_type in {"tshirt", "combined"} else []
     slug = f"{start_date.isoformat()}_to_{end_date.isoformat()}"
+    employee_label = f"{employee.employee_id} — {employee.full_name}" if employee else "All employees"
+    employee_slug = employee.employee_id if employee else "all_employees"
     title = f"Next Toppers Inventory Activity — {label}"
 
     if output_format == "xlsx":
@@ -197,6 +238,7 @@ def download_activity_report(request):
         summary = workbook.active
         summary.title = "Summary"
         summary.append(["Report", title])
+        summary.append(["Employee", employee_label])
         summary.append(["From", start_date.strftime("%d-%m-%Y")])
         summary.append(["To", end_date.strftime("%d-%m-%Y")])
         summary.append(["Book activity rows", len(books)])
@@ -205,10 +247,10 @@ def download_activity_report(request):
         for cell in summary["A"]:
             cell.font = Font(bold=True, color=DARK_GRAY)
         summary.column_dimensions["A"].width = 24
-        summary.column_dimensions["B"].width = 48
+        summary.column_dimensions["B"].width = 52
         if report_type in {"book", "combined"}:
             _append_sheet(workbook, "Book Activity", [
-                "Asset ID", "Book", "Employee ID", "Employee", "Allocated at", "Allocated by",
+                "Asset ID", "Book", "Publication", "Subject", "Employee ID", "Employee", "Allocated at", "Allocated by",
                 "Returned at", "Returned by", "Return condition", "Return note", "Status",
             ], books)
         if report_type in {"tshirt", "combined"}:
@@ -219,23 +261,24 @@ def download_activity_report(request):
         output = BytesIO()
         workbook.save(output)
         response = HttpResponse(output.getvalue(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-        response["Content-Disposition"] = f'attachment; filename="{report_type}_inventory_activity_{slug}.xlsx"'
+        response["Content-Disposition"] = f'attachment; filename="{employee_slug}_{report_type}_inventory_{slug}.xlsx"'
         return response
 
     response = HttpResponse(content_type="application/pdf")
-    response["Content-Disposition"] = f'attachment; filename="{report_type}_inventory_activity_{slug}.pdf"'
+    response["Content-Disposition"] = f'attachment; filename="{employee_slug}_{report_type}_inventory_{slug}.pdf"'
     document = SimpleDocTemplate(response, pagesize=landscape(A4), rightMargin=12*mm, leftMargin=12*mm, topMargin=12*mm, bottomMargin=12*mm)
     styles = getSampleStyleSheet()
     story = [
         Paragraph(title, styles["Title"]),
+        Paragraph(f"Employee: {employee_label}", styles["Normal"]),
         Paragraph(f"Period: {start_date.strftime('%d-%m-%Y')} to {end_date.strftime('%d-%m-%Y')}", styles["Normal"]),
         Spacer(1, 7*mm),
     ]
     if report_type in {"book", "combined"}:
         story.append(Paragraph(f"Book Activity ({len(books)})", styles["Heading2"]))
-        data = [["Asset ID", "Book", "Employee", "Allocated", "Returned", "Condition", "Status"]]
-        data.extend([[row[0], row[1], f"{row[2]} {row[3]}", _excel_value(row[4]), _excel_value(row[6]), row[8], row[10]] for row in books])
-        story.append(_pdf_table(data, [22*mm, 52*mm, 42*mm, 35*mm, 35*mm, 24*mm, 29*mm]))
+        data = [["Asset ID", "Book", "Publication", "Subject", "Employee", "Allocated", "Returned", "Status"]]
+        data.extend([[row[0], row[1], row[2], row[3], f"{row[4]} {row[5]}", _excel_value(row[6]), _excel_value(row[8]), row[12]] for row in books])
+        story.append(_pdf_table(data, [20*mm, 43*mm, 35*mm, 28*mm, 40*mm, 33*mm, 33*mm, 26*mm]))
     if report_type == "combined":
         story.append(PageBreak())
     if report_type in {"tshirt", "combined"}:
