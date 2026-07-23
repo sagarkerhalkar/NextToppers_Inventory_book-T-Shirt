@@ -2,13 +2,30 @@ from django import forms
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
+from django.utils import timezone
 
 from .models import BrandingSettings, Book, Employee, TshirtBrand, TshirtPurchase, TshirtStock, User
+from .widgets import AjaxSearchSelect
+
+
+def _past_datetime_field(label):
+    return forms.DateTimeField(
+        required=False,
+        label=label,
+        widget=forms.DateTimeInput(
+            format="%Y-%m-%dT%H:%M",
+            attrs={"type": "datetime-local", "max": timezone.localtime().strftime("%Y-%m-%dT%H:%M")},
+        ),
+        input_formats=["%Y-%m-%dT%H:%M"],
+        help_text="Optional. Leave blank to use the current date and time. Future dates are not allowed.",
+    )
 
 
 class StyledFormMixin:
     def _style_fields(self):
         for field in self.fields.values():
+            if isinstance(field.widget, AjaxSearchSelect):
+                continue
             css = "form-select" if isinstance(field.widget, forms.Select) else "form-control"
             if isinstance(field.widget, forms.CheckboxInput):
                 css = "form-check-input"
@@ -55,16 +72,31 @@ class EmployeeRecordForm(StyledFormMixin, forms.ModelForm):
         model = Employee
         fields = [
             "employee_id", "full_name", "mobile_number", "email", "department", "designation",
-            "joining_date", "office_location", "profile_picture", "default_tshirt_size", "is_active", "notes",
+            "joining_date", "office_location", "profile_picture", "default_tshirt_size",
+            "tshirt_entitlement_start_date", "tshirt_entitlement_end_date", "is_active", "notes",
         ]
-        widgets = {"joining_date": forms.DateInput(attrs={"type": "date"}), "notes": forms.Textarea(attrs={"rows": 3})}
+        widgets = {
+            "joining_date": forms.DateInput(attrs={"type": "date"}),
+            "tshirt_entitlement_start_date": forms.DateInput(attrs={"type": "date"}),
+            "tshirt_entitlement_end_date": forms.DateInput(attrs={"type": "date"}),
+            "notes": forms.Textarea(attrs={"rows": 3}),
+        }
+        labels = {
+            "tshirt_entitlement_start_date": "T-shirt Entitlement Start Date",
+            "tshirt_entitlement_end_date": "T-shirt Entitlement End Date",
+        }
         help_texts = {
             "employee_id": "This ID can be corrected later when it was entered by mistake.",
             "mobile_number": "Optional. When entered, use +91 followed by the 10-digit Indian mobile number.",
+            "tshirt_entitlement_start_date": "Optional Admin setting. Leave both entitlement dates blank to use the normal rolling previous 12 months.",
+            "tshirt_entitlement_end_date": "Optional Admin setting. Enter both dates to use a fixed employee-specific period.",
         }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, actor=None, **kwargs):
         super().__init__(*args, **kwargs)
+        if not actor or actor.role not in {User.Role.ADMIN, User.Role.SUPER_ADMIN}:
+            self.fields.pop("tshirt_entitlement_start_date", None)
+            self.fields.pop("tshirt_entitlement_end_date", None)
         self._style_fields()
 
     def clean_employee_id(self):
@@ -72,6 +104,19 @@ class EmployeeRecordForm(StyledFormMixin, forms.ModelForm):
 
     def clean_mobile_number(self):
         return (self.cleaned_data.get("mobile_number") or "").strip() or None
+
+    def clean(self):
+        data = super().clean()
+        start = data.get("tshirt_entitlement_start_date")
+        end = data.get("tshirt_entitlement_end_date")
+        if "tshirt_entitlement_start_date" in self.fields and bool(start) != bool(end):
+            raise forms.ValidationError("Enter both T-shirt entitlement dates, or leave both blank.")
+        if start and end:
+            if end < start:
+                self.add_error("tshirt_entitlement_end_date", "End date cannot be before the start date.")
+            elif (end - start).days > 366:
+                self.add_error("tshirt_entitlement_end_date", "The employee entitlement period cannot be longer than 12 months.")
+        return data
 
 
 class AdminPasswordResetForm(StyledFormMixin, forms.Form):
@@ -127,17 +172,24 @@ class BookForm(StyledFormMixin, forms.ModelForm):
 
 
 class BookAllocationForm(StyledFormMixin, forms.Form):
-    employee = forms.ModelChoiceField(queryset=Employee.objects.none())
+    employee = forms.ModelChoiceField(
+        queryset=Employee.objects.none(),
+        widget=AjaxSearchSelect("inventory:employee_autocomplete", "Search Employee ID, name or mobile"),
+    )
+    allocated_at = _past_datetime_field("Allocation Date & Time")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["employee"].queryset = Employee.objects.filter(is_active=True).order_by("employee_id")
+        queryset = Employee.objects.filter(is_active=True).order_by("employee_id")
+        self.fields["employee"].queryset = queryset
+        self.fields["employee"].widget.queryset = queryset
         self._style_fields()
 
 
 class BookReturnForm(StyledFormMixin, forms.Form):
     return_condition = forms.ChoiceField(choices=Book.Condition.choices)
     return_note = forms.CharField(widget=forms.Textarea(attrs={"rows": 3}))
+    returned_at = _past_datetime_field("Return Date & Time")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -163,26 +215,47 @@ class TshirtPurchaseForm(StyledFormMixin, forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["stock"].queryset = TshirtStock.objects.select_related("brand").filter(brand__is_active=True).order_by("brand__name", "size")
+        queryset = TshirtStock.objects.select_related("brand").filter(brand__is_active=True).order_by("brand__name", "size")
+        self.fields["stock"].queryset = queryset
+        self.fields["stock"].widget = AjaxSearchSelect("inventory:tshirt_stock_autocomplete", "Search brand, size or available stock")
+        self.fields["stock"].widget.queryset = queryset
         self._style_fields()
 
 
 class FreeTshirtIssueForm(StyledFormMixin, forms.Form):
-    employee = forms.ModelChoiceField(queryset=Employee.objects.none())
-    stock = forms.ModelChoiceField(queryset=TshirtStock.objects.none())
+    employee = forms.ModelChoiceField(
+        queryset=Employee.objects.none(),
+        widget=AjaxSearchSelect("inventory:employee_autocomplete", "Search Employee ID, name or mobile"),
+    )
+    stock = forms.ModelChoiceField(
+        queryset=TshirtStock.objects.none(),
+        widget=AjaxSearchSelect("inventory:tshirt_stock_autocomplete", "Search T-shirt brand or size"),
+    )
     quantity = forms.IntegerField(min_value=1, initial=1)
+    issued_at = _past_datetime_field("Issue Date & Time")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["employee"].queryset = Employee.objects.filter(is_active=True).order_by("employee_id")
-        self.fields["stock"].queryset = TshirtStock.objects.select_related("brand").filter(brand__is_active=True).order_by("brand__name", "size")
+        employee_queryset = Employee.objects.filter(is_active=True).order_by("employee_id")
+        stock_queryset = TshirtStock.objects.select_related("brand").filter(brand__is_active=True).order_by("brand__name", "size")
+        self.fields["employee"].queryset = employee_queryset
+        self.fields["employee"].widget.queryset = employee_queryset
+        self.fields["stock"].queryset = stock_queryset
+        self.fields["stock"].widget.queryset = stock_queryset
         self._style_fields()
 
 
 class PaidTshirtRequestForm(StyledFormMixin, forms.Form):
-    employee = forms.ModelChoiceField(queryset=Employee.objects.none())
-    stock = forms.ModelChoiceField(queryset=TshirtStock.objects.none())
+    employee = forms.ModelChoiceField(
+        queryset=Employee.objects.none(),
+        widget=AjaxSearchSelect("inventory:employee_autocomplete", "Search Employee ID, name or mobile"),
+    )
+    stock = forms.ModelChoiceField(
+        queryset=TshirtStock.objects.none(),
+        widget=AjaxSearchSelect("inventory:tshirt_stock_autocomplete", "Search T-shirt brand or size"),
+    )
     quantity = forms.IntegerField(min_value=1, initial=1)
+    requested_at = _past_datetime_field("Request / Entry Date & Time")
     payment_amount = forms.DecimalField(max_digits=12, decimal_places=2, min_value=0.01)
     payment_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
     payment_proof = forms.FileField()
@@ -190,8 +263,12 @@ class PaidTshirtRequestForm(StyledFormMixin, forms.Form):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["employee"].queryset = Employee.objects.filter(is_active=True).order_by("employee_id")
-        self.fields["stock"].queryset = TshirtStock.objects.select_related("brand").filter(brand__is_active=True).order_by("brand__name", "size")
+        employee_queryset = Employee.objects.filter(is_active=True).order_by("employee_id")
+        stock_queryset = TshirtStock.objects.select_related("brand").filter(brand__is_active=True).order_by("brand__name", "size")
+        self.fields["employee"].queryset = employee_queryset
+        self.fields["employee"].widget.queryset = employee_queryset
+        self.fields["stock"].queryset = stock_queryset
+        self.fields["stock"].widget.queryset = stock_queryset
         self._style_fields()
 
 
