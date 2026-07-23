@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import enhancement_views, import_views, list_views, periodic_reports, report_views, views
+from . import enhancement_views, import_views, list_views, masterdata_views, periodic_reports, report_views, views
 
 app_name = "inventory"
 
@@ -21,10 +21,12 @@ urlpatterns = [
     path("employees/<int:pk>/history/", list_views.employee_history, name="employee_history"),
     path("employees/<int:pk>/history.xlsx", report_views.export_employee_history_excel, name="export_employee_history_excel"),
     path("employees/<int:pk>/edit/", views.employee_edit, name="employee_edit"),
+    path("employees/<int:pk>/delete/", masterdata_views.employee_delete, name="employee_delete"),
     path("login-users/", list_views.login_user_list, name="login_user_list"),
     path("login-users/add/", views.login_user_create, name="login_user_create"),
     path("login-users/<int:pk>/edit/", views.login_user_edit, name="login_user_edit"),
     path("login-users/<int:pk>/reset-password/", views.employee_reset_password, name="employee_reset_password"),
+    path("login-users/<int:pk>/delete/", masterdata_views.login_user_delete, name="login_user_delete"),
     path("tshirts/brands/", list_views.tshirt_brand_list, name="tshirt_brand_list"),
     path("tshirts/brands/add/", enhancement_views.tshirt_brand_create, name="tshirt_brand_create"),
     path("tshirts/brands/<int:pk>/edit/", enhancement_views.tshirt_brand_edit, name="tshirt_brand_edit"),
