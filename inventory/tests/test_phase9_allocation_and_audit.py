@@ -204,12 +204,14 @@ class PhaseNineAllocationAndAuditTests(TestCase):
         paid, _purchase = self._create_paid_request_and_purchase()
         self.client.force_login(self.admin)
         view_response = self.client.get(reverse("inventory:paid_tshirt_document", args=[paid.pk, "payment"]))
+        self.addCleanup(view_response.close)
         self.assertEqual(view_response.status_code, 200)
         self.assertIn("inline", view_response["Content-Disposition"])
         download_response = self.client.get(
             reverse("inventory:paid_tshirt_document", args=[paid.pk, "payment"]),
             {"download": "1"},
         )
+        self.addCleanup(download_response.close)
         self.assertEqual(download_response.status_code, 200)
         self.assertIn("attachment", download_response["Content-Disposition"])
 
@@ -239,6 +241,7 @@ class PhaseNineAllocationAndAuditTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         workbook = load_workbook(BytesIO(response.content))
+        self.addCleanup(workbook.close)
         self.assertEqual(workbook["Summary"]["B2"].value, "NXTTP0100 — Sagar Employee")
         self.assertEqual(workbook["Book Activity"].max_row, 2)
 
@@ -254,11 +257,13 @@ class PhaseNineAllocationAndAuditTests(TestCase):
         export = self.client.get(reverse("inventory:audit_evidence_export"), {"format": "xlsx"})
         self.assertEqual(export.status_code, 200)
         workbook = load_workbook(BytesIO(export.content))
+        self.addCleanup(workbook.close)
         sheet = workbook["Audit Evidence"]
         self.assertGreaterEqual(sheet.max_row, 6)
         self.assertTrue(any(sheet.cell(row, 6).hyperlink for row in range(2, sheet.max_row + 1)))
         self.assertTrue(any(sheet.cell(row, 7).hyperlink for row in range(2, sheet.max_row + 1)))
 
         bill = self.client.get(reverse("inventory:tshirt_purchase_document", args=[purchase.pk]), {"download": "1"})
+        self.addCleanup(bill.close)
         self.assertEqual(bill.status_code, 200)
         self.assertIn("attachment", bill["Content-Disposition"])
