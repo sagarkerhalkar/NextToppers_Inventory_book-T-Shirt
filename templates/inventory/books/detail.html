@@ -1,7 +1,25 @@
-{% extends 'inventory/base.html' %}{% block title %}Book History{% endblock %}
+{% extends 'inventory/base.html' %}
+{% block title %}Book Details{% endblock %}
 {% block content %}
-<div class="page-header hero-header"><div><span class="eyebrow">Book lifecycle</span><h1>{{ book.asset_id }} · {{ book.name }}</h1><p>{{ book.class_name }} {{ book.stream_name }} · ISBN {{ book.isbn|default:'Not recorded' }}</p></div><a href="{% url 'inventory:book_list' %}" class="btn btn-light">Back to Books</a></div>
-<div class="metric-grid mb-4"><div class="metric-card glass-card"><span>Condition</span><strong>{{ book.get_condition_display }}</strong></div><div class="metric-card glass-card"><span>Status</span><strong>{{ book.get_status_display }}</strong></div><div class="metric-card glass-card"><span>Total allocations</span><strong>{{ book.allocations.count }}</strong></div></div>
-<div class="content-card lift-card"><div class="section-title"><h2>Allocation and Return Timeline</h2><p>Every allocation and return date, time and acting employee is preserved.</p></div><div class="timeline-list">
-{% for row in book.allocations.all %}<article class="timeline-item"><div class="timeline-dot {% if row.is_active %}active{% endif %}"></div><div><h3>{{ row.employee.employee_id }} · {{ row.employee.full_name }}</h3><p><b>Allocated:</b> {{ row.allocated_at|date:'d M Y, h:i A' }}{% if row.allocated_by %} by {{ row.allocated_by.full_name }}{% endif %}</p>{% if row.returned_at %}<p><b>Returned:</b> {{ row.returned_at|date:'d M Y, h:i A' }}{% if row.returned_by %} by {{ row.returned_by.full_name }}{% endif %}</p><p><b>Return condition:</b> {{ row.get_return_condition_display }} · {{ row.return_note }}</p>{% else %}<span class="status-pill live">Currently allocated</span>{% endif %}</div></article>{% empty %}<div class="empty-state">This Book has never been allocated.</div>{% endfor %}
-</div></div>{% endblock %}
+<div class="hero-panel">
+  <div><span class="eyebrow">ADMIN BOOK REVIEW</span><h1>{{ book.asset_id }}</h1><p>{{ book.name }}</p></div>
+  <div class="d-flex gap-2"><a class="btn btn-light" href="{% url 'inventory:book_list' %}">Back to Books</a><a class="btn btn-primary" href="{% url 'inventory:book_edit' book.pk %}">Edit Book</a></div>
+</div>
+<div class="content-card premium-card mt-4">
+  <div class="detail-grid">
+    <div class="detail-item"><small>Book Name</small><strong>{{ book.name }}</strong></div>
+    <div class="detail-item"><small>Publication</small><strong>{{ book.publication_name|default:'-' }}</strong></div>
+    <div class="detail-item"><small>Subject</small><strong>{{ book.subject|default:'-' }}</strong></div>
+    <div class="detail-item"><small>Class / Stream</small><strong>{{ book.class_name|default:'-' }} {{ book.stream_name }}</strong></div>
+    <div class="detail-item"><small>ISBN</small><strong>{{ book.isbn|default:'-' }}</strong></div>
+    <div class="detail-item"><small>Condition / Status</small><strong>{{ book.get_condition_display }} · {{ book.get_status_display }}</strong></div>
+    <div class="detail-item"><small>Purchase Date</small><strong>{{ book.purchase_date|date:'d M Y'|default:'-' }}</strong></div>
+    <div class="detail-item"><small>Bill Number</small><strong>{{ book.bill_number|default:'-' }}</strong></div>
+  </div>
+</div>
+<div class="row g-4 mt-1">
+  <div class="col-12 col-lg-6"><div class="document-card"><h3>Book Photo</h3><p class="text-muted">Protected view for Admin and Super Admin.</p>{% if book.book_photo %}<a target="_blank" class="btn btn-outline-primary" href="{% url 'inventory:book_document' book.pk 'photo' %}">Open Book Photo</a>{% else %}<div class="alert alert-secondary mb-0">No Book photo uploaded.</div>{% endif %}</div></div>
+  <div class="col-12 col-lg-6"><div class="document-card"><h3>Bill Photo</h3><p class="text-muted">Protected view for Admin and Super Admin.</p>{% if book.bill_photo %}<a target="_blank" class="btn btn-outline-primary" href="{% url 'inventory:book_document' book.pk 'bill' %}">Open Bill Photo</a>{% else %}<div class="alert alert-secondary mb-0">No bill photo uploaded.</div>{% endif %}</div></div>
+</div>
+<div class="content-card premium-card mt-4"><div class="section-title"><div><span class="eyebrow">BOOK HISTORY</span><h2>Recent Allocation Records</h2></div></div><div class="table-responsive"><table class="table align-middle"><thead><tr><th>Employee</th><th>Allocated</th><th>Returned</th><th>Status</th></tr></thead><tbody>{% for row in book.allocations.all|slice:':20' %}<tr><td>{{ row.recipient.employee_id|default:'-' }} · {{ row.recipient.full_name|default:'-' }}</td><td>{{ row.allocated_at|date:'d M Y, h:i A' }}</td><td>{{ row.returned_at|date:'d M Y, h:i A'|default:'-' }}</td><td>{% if row.is_active %}<span class="status-pill pending">Allocated</span>{% else %}<span class="status-pill healthy">Returned</span>{% endif %}</td></tr>{% empty %}<tr><td colspan="4" class="text-center text-muted">No allocation history.</td></tr>{% endfor %}</tbody></table></div></div>
+{% endblock %}
