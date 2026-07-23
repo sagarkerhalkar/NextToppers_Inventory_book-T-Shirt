@@ -1,4 +1,5 @@
 import threading
+from datetime import timedelta
 
 import requests
 from django.conf import settings
@@ -24,29 +25,52 @@ def _employee_kwargs(employee):
     return {"employee_record": employee} if isinstance(employee, Employee) else {"employee": employee}
 
 
+def _entry_datetime(value, label):
+    value = value or timezone.now()
+    if timezone.is_naive(value):
+        value = timezone.make_aware(value)
+    if value > timezone.now() + timedelta(minutes=1):
+        raise ValueError(f"{label} cannot be in the future.")
+    return value
+
+
 @transaction.atomic
-def allocate_book(*, book, employee, actor):
+def allocate_book(*, book, employee, actor, allocated_at=None):
     locked = Book.objects.select_for_update().get(pk=book.pk)
     if locked.status != Book.Status.IN_LIBRARY or locked.condition in {Book.Condition.LOST, Book.Condition.DAMAGED}:
         raise ValueError("This Book is not available for allocation.")
-    allocation = BookAllocation.objects.create(book=locked, allocated_by=actor, **_employee_kwargs(employee))
+    entry_time = _entry_datetime(allocated_at, "Allocation date and time")
+    allocation = BookAllocation.objects.create(
+        book=locked,
+        allocated_by=actor,
+        allocated_at=entry_time,
+        **_employee_kwargs(employee),
+    )
     locked.status = Book.Status.ALLOCATED
     locked.save(update_fields=["status", "updated_at"])
-    audit(actor, "BOOK_ALLOCATED", allocation, f"{locked.asset_id} allocated to {employee.employee_id}")
+    audit(
+        actor,
+        "BOOK_ALLOCATED",
+        allocation,
+        f"{locked.asset_id} allocated to {employee.employee_id}",
+        metadata={"allocated_at": entry_time.isoformat(), "backdated": entry_time < timezone.now() - timedelta(minutes=2)},
+    )
     notify_allocation(employee, f"Book {locked.asset_id} - {locked.name} has been allocated to {employee.full_name}.")
     return allocation
 
 
 @transaction.atomic
-def return_book(*, allocation, condition, note, actor):
+def return_book(*, allocation, condition, note, actor, returned_at=None):
     locked = BookAllocation.objects.select_for_update().select_related("book", "employee", "employee_record").get(pk=allocation.pk)
     if not locked.is_active:
         raise ValueError("This Book allocation is already closed.")
     if not note.strip():
         raise ValueError("Return note is mandatory.")
-    now = timezone.now()
+    entry_time = _entry_datetime(returned_at, "Return date and time")
+    if entry_time < locked.allocated_at:
+        raise ValueError("Return date and time cannot be before the allocation date and time.")
     locked.is_active = False
-    locked.returned_at = now
+    locked.returned_at = entry_time
     locked.return_condition = condition
     locked.return_note = note.strip()
     locked.returned_by = actor
@@ -56,7 +80,13 @@ def return_book(*, allocation, condition, note, actor):
     book.status = {Book.Condition.LOST: Book.Status.LOST, Book.Condition.DAMAGED: Book.Status.DAMAGED}.get(condition, Book.Status.IN_LIBRARY)
     book.save(update_fields=["condition", "status", "updated_at"])
     recipient = locked.recipient
-    audit(actor, "BOOK_RETURNED", locked, f"{book.asset_id} returned by {recipient.employee_id}")
+    audit(
+        actor,
+        "BOOK_RETURNED",
+        locked,
+        f"{book.asset_id} returned by {recipient.employee_id}",
+        metadata={"returned_at": entry_time.isoformat(), "backdated": entry_time < timezone.now() - timedelta(minutes=2)},
+    )
     return locked
 
 
@@ -70,16 +100,41 @@ def add_tshirt_purchase(*, stock, quantity, actor, **purchase_fields):
     return purchase
 
 
-def free_entitlement(employee, brand):
-    used = TshirtAllocation.rolling_free_used(employee, brand)
+def free_entitlement(employee, brand, as_of=None):
+    as_of = as_of or timezone.now()
+    used = TshirtAllocation.rolling_free_used(employee, brand, as_of=as_of)
     allowance = brand.free_quantity_rolling_12_months
-    return {"allowance": allowance, "used": used, "remaining": max(allowance - used, 0)}
+    custom_period = isinstance(employee, Employee) and employee.has_custom_tshirt_entitlement_period
+    if custom_period:
+        period_start = employee.tshirt_entitlement_start_date
+        period_end = employee.tshirt_entitlement_end_date
+        entry_date = timezone.localdate(as_of)
+        active_period = period_start <= entry_date <= period_end
+    else:
+        period_end = timezone.localdate(as_of)
+        period_start = period_end - timedelta(days=365)
+        active_period = True
+    return {
+        "allowance": allowance,
+        "used": used,
+        "remaining": max(allowance - used, 0),
+        "period_start": period_start,
+        "period_end": period_end,
+        "custom_period": custom_period,
+        "active_period": active_period,
+    }
 
 
 @transaction.atomic
-def issue_free_tshirts(*, employee, stock, quantity, actor):
+def issue_free_tshirts(*, employee, stock, quantity, actor, issued_at=None):
     locked = TshirtStock.objects.select_for_update().select_related("brand").get(pk=stock.pk)
-    summary = free_entitlement(employee, locked.brand)
+    entry_time = _entry_datetime(issued_at, "T-shirt issue date and time")
+    summary = free_entitlement(employee, locked.brand, as_of=entry_time)
+    if summary["custom_period"] and not summary["active_period"]:
+        raise ValueError(
+            f"This employee's free entitlement period is {summary['period_start']:%d-%m-%Y} to {summary['period_end']:%d-%m-%Y}. "
+            "Choose an issue date inside this period or update the employee entitlement dates."
+        )
     if quantity < 1:
         raise ValueError("Quantity must be at least 1.")
     if quantity > summary["remaining"]:
@@ -92,34 +147,49 @@ def issue_free_tshirts(*, employee, stock, quantity, actor):
         issue_type=TshirtAllocation.IssueType.FREE,
         status=TshirtAllocation.Status.ISSUED,
         requested_by=actor,
+        requested_at=entry_time,
         issued_by=actor,
-        issued_at=timezone.now(),
+        issued_at=entry_time,
         **_employee_kwargs(employee),
     )
     locked.available_quantity -= quantity
     locked.allocated_quantity += quantity
     locked.save(update_fields=["available_quantity", "allocated_quantity", "updated_at"])
-    audit(actor, "FREE_TSHIRT_ISSUED", allocation, f"Issued {quantity} free {locked.brand.name} T-shirt(s) to {employee.employee_id}")
+    audit(
+        actor,
+        "FREE_TSHIRT_ISSUED",
+        allocation,
+        f"Issued {quantity} free {locked.brand.name} T-shirt(s) to {employee.employee_id}",
+        metadata={"issued_at": entry_time.isoformat(), "backdated": entry_time < timezone.now() - timedelta(minutes=2)},
+    )
     notify_allocation(employee, f"{quantity} {locked.brand.name} T-shirt(s), size {locked.size}, have been issued to {employee.full_name}.")
     return allocation
 
 
-def create_paid_tshirt_request(*, employee, stock, quantity, actor, payment_amount, payment_date, payment_proof, hr_approval_proof):
+def create_paid_tshirt_request(*, employee, stock, quantity, actor, payment_amount, payment_date, payment_proof, hr_approval_proof, requested_at=None):
     if not payment_proof or not hr_approval_proof or not payment_amount or not payment_date:
         raise ValueError("Payment amount, payment date, payment proof and HR approval proof are mandatory.")
+    entry_time = _entry_datetime(requested_at, "Paid request date and time")
     allocation = TshirtAllocation.objects.create(
         stock=stock,
         quantity=quantity,
         issue_type=TshirtAllocation.IssueType.PAID,
         status=TshirtAllocation.Status.PENDING,
         requested_by=actor,
+        requested_at=entry_time,
         payment_amount=payment_amount,
         payment_date=payment_date,
         payment_proof=payment_proof,
         hr_approval_proof=hr_approval_proof,
         **_employee_kwargs(employee),
     )
-    audit(actor, "PAID_TSHIRT_REQUESTED", allocation, f"Paid T-shirt request for {employee.employee_id}")
+    audit(
+        actor,
+        "PAID_TSHIRT_REQUESTED",
+        allocation,
+        f"Paid T-shirt request for {employee.employee_id}",
+        metadata={"requested_at": entry_time.isoformat(), "backdated": entry_time < timezone.now() - timedelta(minutes=2)},
+    )
     return allocation
 
 
@@ -140,7 +210,7 @@ def approve_paid_tshirt_request(*, allocation, actor):
     locked.approved_by = actor
     locked.approved_at = now
     locked.issued_by = actor
-    locked.issued_at = now
+    locked.issued_at = locked.requested_at if locked.requested_at < now else now
     locked.save()
     stock.available_quantity -= locked.quantity
     stock.allocated_quantity += locked.quantity
