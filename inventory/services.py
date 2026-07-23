@@ -1,7 +1,9 @@
+import threading
+
 import requests
 from django.conf import settings
 from django.core.mail import send_mail
-from django.db import transaction
+from django.db import close_old_connections, transaction
 from django.utils import timezone
 
 from .models import AuditLog, Book, BookAllocation, Employee, NotificationLog, TshirtAllocation, TshirtPurchase, TshirtStock
@@ -163,28 +165,62 @@ def reject_paid_tshirt_request(*, allocation, reason, actor):
     return allocation
 
 
+def _deliver_email(log_id, email_address):
+    close_old_connections()
+    try:
+        log = NotificationLog.objects.get(pk=log_id)
+        send_mail(log.subject, log.message, settings.DEFAULT_FROM_EMAIL, [email_address], fail_silently=False)
+        NotificationLog.objects.filter(pk=log_id).update(status=NotificationLog.Status.SENT, sent_at=timezone.now(), error_message="")
+    except Exception as exc:
+        NotificationLog.objects.filter(pk=log_id).update(status=NotificationLog.Status.FAILED, error_message=str(exc)[:2000])
+    finally:
+        close_old_connections()
+
+
+def _deliver_google_chat(log_id, webhook):
+    close_old_connections()
+    try:
+        log = NotificationLog.objects.get(pk=log_id)
+        response = requests.post(webhook, json={"text": log.message}, timeout=8)
+        response.raise_for_status()
+        NotificationLog.objects.filter(pk=log_id).update(status=NotificationLog.Status.SENT, sent_at=timezone.now(), error_message="")
+    except Exception as exc:
+        NotificationLog.objects.filter(pk=log_id).update(status=NotificationLog.Status.FAILED, error_message=str(exc)[:2000])
+    finally:
+        close_old_connections()
+
+
+def _start_after_commit(target, *args):
+    def start_thread():
+        threading.Thread(target=target, args=args, daemon=True).start()
+    transaction.on_commit(start_thread)
+
+
 def notify_allocation(employee, message):
+    """Save inventory immediately and deliver external notifications after commit."""
     log_kwargs = {"employee_record": employee} if isinstance(employee, Employee) else {"recipient": employee}
-    NotificationLog.objects.create(channel=NotificationLog.Channel.IN_APP, message=message, status=NotificationLog.Status.SENT, sent_at=timezone.now(), **log_kwargs)
+    NotificationLog.objects.create(
+        channel=NotificationLog.Channel.IN_APP,
+        message=message,
+        status=NotificationLog.Status.SENT,
+        sent_at=timezone.now(),
+        **log_kwargs,
+    )
     if employee.email:
-        log = NotificationLog.objects.create(channel=NotificationLog.Channel.EMAIL, subject="Next Toppers Inventory Update", message=message, **log_kwargs)
-        try:
-            send_mail(log.subject, message, settings.DEFAULT_FROM_EMAIL, [employee.email], fail_silently=False)
-            log.status = NotificationLog.Status.SENT
-            log.sent_at = timezone.now()
-        except Exception as exc:
-            log.status = NotificationLog.Status.FAILED
-            log.error_message = str(exc)
-        log.save()
+        log = NotificationLog.objects.create(
+            channel=NotificationLog.Channel.EMAIL,
+            subject="Next Toppers Inventory Update",
+            message=message,
+            status=NotificationLog.Status.PENDING,
+            **log_kwargs,
+        )
+        _start_after_commit(_deliver_email, log.pk, employee.email)
     webhook = settings.GOOGLE_CHAT_WEBHOOK_URL
     if webhook:
-        log = NotificationLog.objects.create(channel=NotificationLog.Channel.GOOGLE_CHAT, message=message, **log_kwargs)
-        try:
-            response = requests.post(webhook, json={"text": message}, timeout=10)
-            response.raise_for_status()
-            log.status = NotificationLog.Status.SENT
-            log.sent_at = timezone.now()
-        except Exception as exc:
-            log.status = NotificationLog.Status.FAILED
-            log.error_message = str(exc)
-        log.save()
+        log = NotificationLog.objects.create(
+            channel=NotificationLog.Channel.GOOGLE_CHAT,
+            message=message,
+            status=NotificationLog.Status.PENDING,
+            **log_kwargs,
+        )
+        _start_after_commit(_deliver_google_chat, log.pk, webhook)
