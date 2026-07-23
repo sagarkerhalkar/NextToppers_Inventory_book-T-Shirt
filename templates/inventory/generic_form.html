@@ -1,6 +1,6 @@
 {% extends 'inventory/base.html' %}{% block title %}{{ title }}{% endblock %}
 {% block content %}
-<div class="page-header"><div><span class="eyebrow">FAST DATA ENTRY</span><h1>{{ title }}</h1>{% if readonly_value %}<p>Permanent ID: <strong>{{ readonly_value }}</strong></p>{% endif %}{% if help_text %}<p>{{ help_text }}</p>{% endif %}</div></div>
+<div class="page-header"><div><span class="eyebrow">FAST DATA ENTRY</span><h1>{{ title }}</h1>{% if readonly_value %}<p>Current ID before editing: <strong>{{ readonly_value }}</strong></p>{% endif %}{% if help_text %}<p>{{ help_text }}</p>{% endif %}</div></div>
 <div class="content-card form-card premium-card">
 <form method="post" enctype="multipart/form-data" class="save-form">{% csrf_token %}
   {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
