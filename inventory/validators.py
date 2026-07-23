@@ -3,7 +3,7 @@ from django.core.exceptions import ValidationError
 
 EMPLOYEE_ID_PATTERN = re.compile(r"^NXTTP\d{4}$")
 MOBILE_PATTERN = re.compile(r"^\+91[6-9]\d{9}$")
-BOOK_ASSET_PATTERN = re.compile(r"^BOOK\d{6}$")
+BOOK_ASSET_PATTERN = re.compile(r"^[A-Z0-9][A-Z0-9_-]{2,9}$")
 
 
 def validate_employee_id(value):
@@ -18,4 +18,7 @@ def validate_indian_mobile(value):
 
 def validate_book_asset_id(value):
     if value and not BOOK_ASSET_PATTERN.fullmatch(value):
-        raise ValidationError("Book Asset ID must use the format BOOK000001.")
+        raise ValidationError(
+            "Book Asset ID must be 3 to 10 uppercase letters, numbers, hyphens or underscores, "
+            "for example NTB-0001 or SCI9-001."
+        )
