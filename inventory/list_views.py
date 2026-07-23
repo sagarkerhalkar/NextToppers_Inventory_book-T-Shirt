@@ -22,6 +22,8 @@ def book_list(request):
         books = books.filter(
             models.Q(asset_id__icontains=query)
             | models.Q(name__icontains=query)
+            | models.Q(publication_name__icontains=query)
+            | models.Q(subject__icontains=query)
             | models.Q(isbn__icontains=query)
             | models.Q(class_name__icontains=query)
             | models.Q(stream_name__icontains=query)
@@ -104,6 +106,8 @@ def book_history(request):
         allocations = allocations.filter(
             models.Q(book__asset_id__icontains=query)
             | models.Q(book__name__icontains=query)
+            | models.Q(book__publication_name__icontains=query)
+            | models.Q(book__subject__icontains=query)
             | models.Q(employee_record__employee_id__icontains=query)
             | models.Q(employee_record__full_name__icontains=query)
             | models.Q(employee__employee_id__icontains=query)
@@ -124,6 +128,8 @@ def employee_history(request, pk):
         all_books = all_books.filter(
             models.Q(book__asset_id__icontains=book_query)
             | models.Q(book__name__icontains=book_query)
+            | models.Q(book__publication_name__icontains=book_query)
+            | models.Q(book__subject__icontains=book_query)
             | models.Q(return_note__icontains=book_query)
         )
 
