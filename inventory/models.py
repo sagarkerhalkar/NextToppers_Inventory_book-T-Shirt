@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 from decimal import Decimal
 
 from django.conf import settings
@@ -90,6 +90,8 @@ class Employee(TimeStampedModel):
     office_location = models.CharField(max_length=160, blank=True)
     profile_picture = models.ImageField(upload_to="employees/", blank=True)
     default_tshirt_size = models.CharField(max_length=5, choices=User.TshirtSize.choices, default=User.TshirtSize.L)
+    tshirt_entitlement_start_date = models.DateField(null=True, blank=True)
+    tshirt_entitlement_end_date = models.DateField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
     notes = models.TextField(blank=True)
 
@@ -97,12 +99,31 @@ class Employee(TimeStampedModel):
         ordering = ["employee_id"]
         indexes = [models.Index(fields=["full_name", "mobile_number"])]
 
+    def clean(self):
+        super().clean()
+        start = self.tshirt_entitlement_start_date
+        end = self.tshirt_entitlement_end_date
+        if bool(start) != bool(end):
+            raise ValidationError({
+                "tshirt_entitlement_start_date": "Enter both the entitlement start and end dates, or leave both blank.",
+                "tshirt_entitlement_end_date": "Enter both the entitlement start and end dates, or leave both blank.",
+            })
+        if start and end:
+            if end < start:
+                raise ValidationError({"tshirt_entitlement_end_date": "Entitlement end date cannot be before the start date."})
+            if (end - start).days > 366:
+                raise ValidationError({"tshirt_entitlement_end_date": "The entitlement period cannot be longer than 12 months."})
+
     def save(self, *args, **kwargs):
         self.employee_id = (self.employee_id or "").upper().strip()
         self.mobile_number = (self.mobile_number or "").strip() or None
         self.full_name = (self.full_name or "").strip()
         self.full_clean()
         super().save(*args, **kwargs)
+
+    @property
+    def has_custom_tshirt_entitlement_period(self):
+        return bool(self.tshirt_entitlement_start_date and self.tshirt_entitlement_end_date)
 
     def __str__(self):
         return f"{self.employee_id} - {self.full_name}"
@@ -303,18 +324,25 @@ class TshirtAllocation(TimeStampedModel):
     @classmethod
     def rolling_free_used(cls, employee, brand, as_of=None):
         as_of = as_of or timezone.now()
-        start = as_of - timedelta(days=365)
         filters = {
             "stock__brand": brand,
             "issue_type": cls.IssueType.FREE,
             "status": cls.Status.ISSUED,
-            "issued_at__gte": start,
-            "issued_at__lte": as_of,
         }
         if isinstance(employee, Employee):
             filters["employee_record"] = employee
+            if employee.has_custom_tshirt_entitlement_period:
+                start = timezone.make_aware(datetime.combine(employee.tshirt_entitlement_start_date, time.min))
+                end = timezone.make_aware(datetime.combine(employee.tshirt_entitlement_end_date, time.max))
+            else:
+                start = as_of - timedelta(days=365)
+                end = as_of
         else:
             filters["employee"] = employee
+            start = as_of - timedelta(days=365)
+            end = as_of
+        filters["issued_at__gte"] = start
+        filters["issued_at__lte"] = end
         return cls.objects.filter(**filters).aggregate(total=models.Sum("quantity"))["total"] or 0
 
 
