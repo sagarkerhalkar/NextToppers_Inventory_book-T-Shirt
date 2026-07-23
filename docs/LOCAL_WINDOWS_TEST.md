@@ -24,7 +24,7 @@ Python 3.11 is also supported. Do not use Python 3.13 or 3.14 for this tested bu
    - Full name
    - Mobile number in `+91XXXXXXXXXX` format
    - Optional email
-   - Password of at least 10 characters
+   - Password of at least 4 characters
 6. Wait for the message **INSTALLATION COMPLETED SUCCESSFULLY**.
 
 Internet is required during the first installation because Python packages must be downloaded.
@@ -74,6 +74,12 @@ After login, test these actions:
 8. Open Reports and download Excel/PDF files.
 9. Open Import Data and download an Excel template.
 10. Upload a small test Excel file.
+
+## Password rule
+
+- Login passwords must contain at least 4 characters.
+- Passwords remain securely hashed in the database.
+- Existing passwords continue to work and are not changed by an application update.
 
 ## When an error appears
 
