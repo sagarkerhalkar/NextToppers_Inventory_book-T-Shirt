@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import enhancement_views, import_views, list_views, masterdata_views, periodic_reports, report_views, views
+from . import book_export_views, enhancement_views, import_views, list_views, masterdata_views, periodic_reports, report_views, views
 
 app_name = "inventory"
 
@@ -45,8 +45,8 @@ urlpatterns = [
     path("reports/", views.reports_index, name="reports"),
     path("reports/activity/download/", periodic_reports.download_activity_report, name="download_activity_report"),
     path("backups/download/", views.download_database_backup, name="download_database_backup"),
-    path("reports/books.xlsx", views.export_books_excel, name="export_books_excel"),
-    path("reports/books.pdf", views.export_books_pdf, name="export_books_pdf"),
+    path("reports/books.xlsx", book_export_views.export_books_excel, name="export_books_excel"),
+    path("reports/books.pdf", book_export_views.export_books_pdf, name="export_books_pdf"),
     path("reports/tshirts.xlsx", views.export_tshirts_excel, name="export_tshirts_excel"),
     path("reports/employees.xlsx", report_views.export_employees_excel, name="export_employees_excel"),
     path("reports/book-history.xlsx", report_views.export_book_history_excel, name="export_book_history_excel"),
