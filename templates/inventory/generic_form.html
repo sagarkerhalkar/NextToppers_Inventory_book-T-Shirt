@@ -1,12 +1,12 @@
 {% extends 'inventory/base.html' %}{% block title %}{{ title }}{% endblock %}
 {% block content %}
-<div class="page-header"><div><h1>{{ title }}</h1>{% if readonly_value %}<p>Permanent ID: <strong>{{ readonly_value }}</strong></p>{% endif %}</div></div>
-<div class="content-card form-card">
-<form method="post" enctype="multipart/form-data">{% csrf_token %}
+<div class="page-header"><div><span class="eyebrow">FAST DATA ENTRY</span><h1>{{ title }}</h1>{% if readonly_value %}<p>Permanent ID: <strong>{{ readonly_value }}</strong></p>{% endif %}{% if help_text %}<p>{{ help_text }}</p>{% endif %}</div></div>
+<div class="content-card form-card premium-card">
+<form method="post" enctype="multipart/form-data" class="save-form">{% csrf_token %}
   {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
   <div class="row g-3">
     {% for field in form %}<div class="col-12 col-md-6 {% if field.field.widget.input_type == 'textarea' %}col-md-12{% endif %}"><label class="form-label">{{ field.label }}{% if field.field.required %} *{% endif %}</label>{{ field }}{% if field.help_text %}<div class="form-text">{{ field.help_text|safe }}</div>{% endif %}{% for error in field.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</div>{% endfor %}
   </div>
-  <div class="mt-4 d-flex gap-2"><button class="btn btn-primary">Save</button><button type="button" class="btn btn-outline-secondary" onclick="history.back()">Cancel</button></div>
+  <div class="mt-4 d-flex gap-2"><button class="btn btn-primary save-button" type="submit"><span class="save-label">Save</span><span class="save-working d-none"><span class="spinner-border spinner-border-sm me-2"></span>Saving...</span></button><button type="button" class="btn btn-outline-secondary" onclick="history.back()">Cancel</button></div>
 </form>
 </div>{% endblock %}
