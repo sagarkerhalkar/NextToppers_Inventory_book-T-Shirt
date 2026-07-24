@@ -27,7 +27,9 @@ class IisOfflineDeploymentTests(SimpleTestCase):
         self.assertIn("vendor/bootstrap/bootstrap.bundle.min.js", base)
         self.assertIn("vendor/bootstrap/bootstrap.min.css", login)
         self.assertIn("local-bar-chart", dashboard)
-        self.assertIn("local-donut", dashboard)
+        self.assertIn("dashboard-donut", dashboard)
+        self.assertIn('data-inventory-tab="books"', dashboard)
+        self.assertIn('data-inventory-tab="tshirts"', dashboard)
 
     def test_runtime_preflight_accepts_white_noise_versioned_bootstrap_url(self):
         script_path = Path(settings.BASE_DIR) / "scripts" / "runtime_preflight.py"
