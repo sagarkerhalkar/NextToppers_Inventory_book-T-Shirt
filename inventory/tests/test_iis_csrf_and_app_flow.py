@@ -46,7 +46,7 @@ class IisCsrfAndApplicationFlowTests(TestCase):
             HTTP_REFERER=f"{self.public_origin}/login/",
         )
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Login User ID or password is incorrect.")
+        self.assertContains(response, "Please enter a correct employee id and password")
         self.assertNotContains(response, "CSRF verification failed", status_code=200)
         self.assertRegex(response.content.decode(), r'name="login_nonce" value="[^"]+"')
 
