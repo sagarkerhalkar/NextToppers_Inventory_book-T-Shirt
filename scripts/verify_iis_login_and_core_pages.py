@@ -140,10 +140,12 @@ def verify_csrf_login_post(host: str, port: int, timeout: float) -> None:
 
 
 def choose_test_user() -> User:
+    admin_roles = [User.Role.SUPER_ADMIN, User.Role.ADMIN]
     preferred = User.objects.filter(
         employee_id="NXTTP0036",
         is_active=True,
         must_change_password=False,
+        role__in=admin_roles,
     ).first()
     if preferred:
         return preferred
