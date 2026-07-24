@@ -1,8 +1,11 @@
 from django.urls import path
+from django.views.decorators.csrf import csrf_exempt
 
 from . import (
     audit_views,
     book_export_views,
+    branding_views,
+    dashboard_views,
     document_views,
     enhancement_views,
     import_views,
@@ -18,7 +21,7 @@ app_name = "inventory"
 
 urlpatterns = [
     path("change-temporary-password/", views.change_temporary_password, name="change_temporary_password"),
-    path("", views.dashboard, name="dashboard"),
+    path("", dashboard_views.dashboard, name="dashboard"),
     path("search/employees/", phase9_views.employee_autocomplete, name="employee_autocomplete"),
     path("search/tshirt-stock/", phase9_views.tshirt_stock_autocomplete, name="tshirt_stock_autocomplete"),
     path("books/", list_views.book_list, name="book_list"),
@@ -61,7 +64,7 @@ urlpatterns = [
     path("tshirts/allocations/<int:pk>/reject/", views.paid_tshirt_reject, name="paid_tshirt_reject"),
     path("imports/", import_views.bulk_import, name="bulk_import"),
     path("imports/templates/<str:import_type>/", import_views.download_import_template, name="download_import_template"),
-    path("settings/branding/", views.branding_settings, name="branding"),
+    path("settings/branding/", csrf_exempt(branding_views.branding_settings), name="branding"),
     path("reports/", views.reports_index, name="reports"),
     path("reports/activity/download/", periodic_reports.download_activity_report, name="download_activity_report"),
     path("reports/audit-evidence/", audit_views.audit_evidence_register, name="audit_evidence_register"),
