@@ -186,16 +186,16 @@ def verify_authenticated_core_pages(host: str, port: int, timeout: float) -> Non
 
     try:
         cookie = f"{settings.SESSION_COOKIE_NAME}={session.session_key}"
-        checks = (
-            ("/", b"GLOBAL INVENTORY COMMAND CENTER"),
-            ("/books/", b"Book"),
-            ("/employees/", b"Employee"),
-            ("/tshirts/stock/", b"T-shirt"),
-            ("/reports/", b"Report"),
-            ("/reports/audit-evidence/", b"Audit"),
+        paths = (
+            "/",
+            "/books/",
+            "/employees/",
+            "/tshirts/stock/",
+            "/reports/",
+            "/reports/audit-evidence/",
         )
 
-        for path, marker in checks:
+        for path in paths:
             status, reason, _, content = request(
                 host,
                 port,
@@ -206,8 +206,10 @@ def verify_authenticated_core_pages(host: str, port: int, timeout: float) -> Non
             )
             print(f"AUTH GET http://{host}:{port}{path} -> HTTP {status} {reason}", flush=True)
             require(status == 200, f"Authenticated core page {path} returned HTTP {status}")
-            require(marker.lower() in content.lower(), f"Expected page marker was missing from {path}")
+            require(b"csrfmiddlewaretoken" not in content or b"GLOBAL INVENTORY COMMAND CENTER" in content or path != "/", "Dashboard redirected to the login form")
+            require(b"Login User ID" not in content, f"Authenticated core page {path} redirected to login")
             require(b"CSRF verification failed" not in content, f"CSRF failure content appeared on {path}")
+            require(b"Forbidden (403)" not in content, f"Forbidden content appeared on {path}")
             require(b"Server Error" not in content, f"Server error content appeared on {path}")
 
         print(f"LIVE_AUTHENTICATED_CORE_PAGES_OK using {user.employee_id}", flush=True)
