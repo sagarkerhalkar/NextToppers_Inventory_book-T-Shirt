@@ -12,7 +12,8 @@ New-Item -ItemType Directory -Path $LogRoot -Force | Out-Null
 
 function Write-ServerLog {
     param([string]$Message)
-    "$(Get-Date -Format s) - $Message" | Out-File $LogFile -Append -Encoding utf8
+    $line = "$(Get-Date -Format s) - $Message"
+    Add-Content -Path $LogFile -Value $line -Encoding ASCII
 }
 
 # Google Drive and network folders may take time to become available after login.
@@ -20,7 +21,7 @@ for ($attempt = 1; $attempt -le 18; $attempt++) {
     if (
         (Test-Path (Join-Path $AppRoot "manage.py")) -and
         (Test-Path (Join-Path $AppRoot ".venv\Scripts\python.exe")) -and
-        (Test-Path (Join-Path $AppRoot "scripts\run_waitress_backend.py"))
+        (Test-Path (Join-Path $AppRoot ".venv\Scripts\waitress-serve.exe"))
     ) {
         break
     }
@@ -28,9 +29,9 @@ for ($attempt = 1; $attempt -le 18; $attempt++) {
 }
 
 $PythonExe = Join-Path $AppRoot ".venv\Scripts\python.exe"
-$Runner = Join-Path $AppRoot "scripts\run_waitress_backend.py"
-if (-not (Test-Path $PythonExe) -or -not (Test-Path $Runner)) {
-    Write-ServerLog "Auto-start failed: Python environment or backend runner is unavailable."
+$WaitressExe = Join-Path $AppRoot ".venv\Scripts\waitress-serve.exe"
+if (-not (Test-Path $PythonExe) -or -not (Test-Path $WaitressExe)) {
+    Write-ServerLog "Auto-start failed: Python environment or Waitress executable is unavailable."
     exit 1
 }
 
@@ -41,25 +42,46 @@ if ($Existing) {
 }
 
 Set-Location $AppRoot
-Write-ServerLog "Running Django preflight before private backend startup."
-& $PythonExe manage.py check *> $PreflightLog
-if ($LASTEXITCODE -ne 0) {
+Write-ServerLog "Running Django and WSGI preflight before private backend startup."
+$PreflightOutput = & $PythonExe manage.py check 2>&1
+$PreflightExit = $LASTEXITCODE
+$PreflightOutput | Set-Content -Path $PreflightLog -Encoding UTF8
+if ($PreflightExit -ne 0) {
     Write-ServerLog "Django preflight failed. See $PreflightLog"
     exit 1
 }
 
+$WsgiOutput = & $PythonExe -c "from nexttoppers_inventory.wsgi import application; print('WSGI import successful')" 2>&1
+$WsgiExit = $LASTEXITCODE
+$WsgiOutput | Add-Content -Path $PreflightLog -Encoding UTF8
+if ($WsgiExit -ne 0) {
+    Write-ServerLog "WSGI import failed. See $PreflightLog"
+    exit 1
+}
+
 Remove-Item $StdoutLog, $StderrLog -Force -ErrorAction SilentlyContinue
-Write-ServerLog "Starting private backend through python.exe on 127.0.0.1:$BackendPort."
+New-Item -ItemType File -Path $StdoutLog -Force | Out-Null
+New-Item -ItemType File -Path $StderrLog -Force | Out-Null
+Write-ServerLog "Starting Waitress directly on private address 127.0.0.1:$BackendPort."
+
+# Important: start waitress-serve.exe directly. All arguments contain no spaces,
+# so Windows cannot split the Google Drive application path incorrectly.
+$WaitressArguments = @(
+    "--listen=127.0.0.1:$BackendPort",
+    "--threads=8",
+    "--channel-timeout=120",
+    "nexttoppers_inventory.wsgi:application"
+)
 $Process = Start-Process `
-    -FilePath $PythonExe `
-    -ArgumentList "`"$Runner`"" `
+    -FilePath $WaitressExe `
+    -ArgumentList $WaitressArguments `
     -WorkingDirectory $AppRoot `
     -WindowStyle Hidden `
     -RedirectStandardOutput $StdoutLog `
     -RedirectStandardError $StderrLog `
     -PassThru
 
-$Process.Id | Set-Content $PidFile -Encoding ascii
+$Process.Id | Set-Content $PidFile -Encoding ASCII
 for ($attempt = 1; $attempt -le 40; $attempt++) {
     Start-Sleep -Seconds 1
     $Process.Refresh()
