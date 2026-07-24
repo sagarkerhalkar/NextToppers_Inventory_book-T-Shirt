@@ -27,28 +27,37 @@ def require(condition: bool, message: str) -> None:
 
 
 def main() -> int:
-    print("1/5 Django system check")
+    print("1/6 Django system check")
     call_command("check", verbosity=1)
 
-    print("2/5 SQLite connectivity")
+    print("2/6 SQLite connectivity")
     with connection.cursor() as cursor:
         cursor.execute("SELECT 1")
         require(cursor.fetchone() == (1,), "SQLite SELECT 1 did not return the expected result")
 
-    print("3/5 Branding query")
+    print("3/6 Branding query")
     BrandingSettings.load()
 
     client = Client()
 
-    print("4/5 Internal health request")
+    print("4/6 Internal health request")
     health = client.get("/health/", HTTP_HOST="127.0.0.1")
     require(health.status_code == 200, f"Health endpoint returned HTTP {health.status_code}")
     require(health.content == b"NEXT_TOPPERS_INVENTORY_OK", "Health marker is incorrect")
 
-    print("5/5 Internal login-page rendering")
+    print("5/6 Internal login-page rendering")
     login = client.get("/login/", HTTP_HOST="127.0.0.1")
     require(login.status_code == 200, f"Login page returned HTTP {login.status_code}")
-    require(b"Next Toppers" in login.content or b"Login" in login.content, "Login page content marker was not found")
+    require(b"Next Toppers" in login.content, "Login page content marker was not found")
+    require(b"csrfmiddlewaretoken" in login.content, "Login form CSRF token was not rendered")
+
+    print("6/6 Login page is fully local")
+    for forbidden in (b"fonts.googleapis.com", b"fonts.gstatic.com", b"cdn.jsdelivr.net"):
+        require(forbidden not in login.content, f"Login page still contains external dependency: {forbidden.decode()}")
+    require(
+        b"/static/vendor/bootstrap/bootstrap.min.css" in login.content,
+        "Login page does not reference the local Bootstrap stylesheet",
+    )
 
     print("RUNTIME_PREFLIGHT_OK")
     return 0
