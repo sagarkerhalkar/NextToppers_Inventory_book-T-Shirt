@@ -1,0 +1,58 @@
+{% extends 'inventory/base.html' %}
+{% block title %}Excel Imports{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div><h1>Bulk Excel Imports</h1><p>Import employees, Books, and T-shirt stock with row-by-row validation.</p></div>
+</div>
+<div class="row g-4">
+  <div class="col-xl-5">
+    <div class="panel-card">
+      <h2 class="h5 mb-3">1. Download a template</h2>
+      <div class="d-grid gap-2 mb-4">
+        <a class="btn btn-outline-primary" href="{% url 'inventory:download_import_template' 'employees' %}">Employee template</a>
+        <a class="btn btn-outline-primary" href="{% url 'inventory:download_import_template' 'books' %}">Book template</a>
+        <a class="btn btn-outline-primary" href="{% url 'inventory:download_import_template' 'tshirts' %}">T-shirt stock template</a>
+      </div>
+      <h2 class="h5 mb-3">2. Upload completed Excel file</h2>
+      <form method="post" enctype="multipart/form-data" novalidate>
+        {% csrf_token %}
+        {% for field in form %}
+          <div class="mb-3"><label class="form-label">{{ field.label }}</label>{{ field }}
+          {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+          {% for error in field.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</div>
+        {% endfor %}
+        {% for error in form.non_field_errors %}<div class="alert alert-danger">{{ error }}</div>{% endfor %}
+        <button class="btn btn-primary w-100">Validate and Import</button>
+      </form>
+    </div>
+  </div>
+  <div class="col-xl-7">
+    <div class="panel-card">
+      <h2 class="h5">Import rules</h2>
+      <ul class="mb-0">
+        <li>Do not rename template headings.</li>
+        <li>Duplicate Employee IDs, mobile numbers, and Book Asset IDs are blocked.</li>
+        <li>Every accepted row is audited.</li>
+        <li>Rows with errors are skipped; valid rows continue importing.</li>
+        <li>Imported employees must change their temporary password at first login.</li>
+      </ul>
+    </div>
+    {% if result %}
+    <div class="panel-card mt-4">
+      <h2 class="h5">Import result</h2>
+      <div class="row text-center g-3 mb-3">
+        <div class="col-3"><div class="metric-mini"><b>{{ result.total_rows }}</b><span>Total</span></div></div>
+        <div class="col-3"><div class="metric-mini"><b>{{ result.created }}</b><span>Created</span></div></div>
+        <div class="col-3"><div class="metric-mini"><b>{{ result.updated }}</b><span>Updated</span></div></div>
+        <div class="col-3"><div class="metric-mini"><b>{{ result.failed }}</b><span>Errors</span></div></div>
+      </div>
+      {% if result.errors %}
+      <div class="table-responsive"><table class="table table-sm align-middle"><thead><tr><th>Excel row</th><th>Error</th></tr></thead><tbody>
+      {% for error in result.errors %}<tr><td>{{ error.row }}</td><td class="text-danger">{{ error.message }}</td></tr>{% endfor %}
+      </tbody></table></div>
+      {% else %}<div class="alert alert-success mb-0">All rows imported successfully.</div>{% endif %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
