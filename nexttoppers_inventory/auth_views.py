@@ -3,10 +3,10 @@ from __future__ import annotations
 import secrets
 
 from django.conf import settings
-from django.contrib.auth import REDIRECT_FIELD_NAME, login as auth_login
+from django.contrib.auth import REDIRECT_FIELD_NAME, login as auth_login, logout as auth_logout
 from django.contrib.auth.forms import AuthenticationForm
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
-from django.shortcuts import resolve_url
+from django.shortcuts import redirect, resolve_url
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.generic.edit import FormView
 
@@ -97,3 +97,12 @@ class InternalNonceLoginView(FormView):
         self.request.session.pop(self.nonce_session_key, None)
         auth_login(self.request, form.get_user())
         return HttpResponseRedirect(self.get_success_url())
+
+
+def internal_logout(request: HttpRequest) -> HttpResponse:
+    """End the local inventory session without a browser CSRF-cookie dependency."""
+    auth_logout(request)
+    response = redirect("login")
+    response["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response["Pragma"] = "no-cache"
+    return response
