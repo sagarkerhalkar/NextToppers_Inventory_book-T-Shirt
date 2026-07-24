@@ -41,15 +41,23 @@ class DashboardBrandingRedesignTests(TestCase):
         self.assertContains(response, 'data-inventory-panel="tshirts"')
         self.assertNotContains(response, "Control every Book and T-shirt movement")
 
-    def test_uploaded_brand_logo_is_rendered_in_3d_dashboard_module(self):
+    def test_uploaded_brand_logo_is_rendered_and_served_in_production(self):
         branding = BrandingSettings.load()
         branding.organization_name = "Next Toppers Inventory System"
         branding.app_logo = self._png()
         branding.save()
-        response = self.client.get("/")
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "nt-logo-module")
-        self.assertContains(response, branding.app_logo.url)
+
+        dashboard = self.client.get("/")
+        self.assertEqual(dashboard.status_code, 200)
+        self.assertContains(dashboard, "nt-logo-module")
+        self.assertContains(dashboard, branding.app_logo.url)
+
+        logo = self.client.get(branding.app_logo.url)
+        self.assertEqual(logo.status_code, 200)
+        self.assertEqual(logo["Content-Type"], "image/png")
+
+        private_media = self.client.get("/media/payment_proofs/private.pdf")
+        self.assertEqual(private_media.status_code, 404)
 
     def test_branding_save_uses_one_time_nonce_without_csrf_cookie_dependency(self):
         client = Client(enforce_csrf_checks=True)
@@ -78,3 +86,14 @@ class DashboardBrandingRedesignTests(TestCase):
         branding = BrandingSettings.load()
         self.assertEqual(branding.organization_name, "Next Toppers Inventory System")
         self.assertTrue(bool(branding.app_logo))
+        self.assertEqual(client.get(branding.app_logo.url).status_code, 200)
+
+    def test_logout_does_not_require_csrf_cookie(self):
+        client = Client(enforce_csrf_checks=True)
+        client.force_login(self.admin)
+        response = client.get("/logout/")
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, "/login/")
+        dashboard = client.get("/")
+        self.assertEqual(dashboard.status_code, 302)
+        self.assertIn("/login/", dashboard.url)
