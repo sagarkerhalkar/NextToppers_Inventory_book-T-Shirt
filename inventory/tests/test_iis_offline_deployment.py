@@ -19,16 +19,17 @@ class IisOfflineDeploymentTests(SimpleTestCase):
         self.assertIn("local-bar-chart", dashboard)
         self.assertIn("local-donut", dashboard)
 
-    def test_waitress_backend_is_loopback_only_and_uses_diagnostic_runner(self):
+    def test_waitress_backend_is_loopback_only_and_starts_executable_directly(self):
         silent = (Path(settings.BASE_DIR) / "scripts" / "start_server_silent.ps1").read_text(encoding="utf-8")
         visible = (Path(settings.BASE_DIR) / "scripts" / "start_windows.ps1").read_text(encoding="utf-8")
-        runner = (Path(settings.BASE_DIR) / "scripts" / "run_waitress_backend.py").read_text(encoding="utf-8")
         self.assertIn("127.0.0.1:$BackendPort", silent)
         self.assertIn("127.0.0.1:$BackendPort", visible)
         self.assertNotIn("--listen=0.0.0.0:3458", silent)
         self.assertNotIn("--listen=0.0.0.0:3458", visible)
-        self.assertIn('host="127.0.0.1"', runner)
-        self.assertIn("port=3460", runner)
+        self.assertIn("waitress-serve.exe", silent)
+        self.assertIn("-FilePath $WaitressExe", silent)
+        self.assertIn('"--listen=127.0.0.1:$BackendPort"', silent)
+        self.assertNotIn('-ArgumentList "`"$Runner`""', silent)
         self.assertIn("backend_stderr.log", silent)
         self.assertIn("backend_preflight.log", silent)
         self.assertIn("Start-Process", silent)
