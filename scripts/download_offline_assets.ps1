@@ -39,11 +39,33 @@ foreach ($download in $downloads) {
     if ($file.Length -lt $download.MinimumBytes) {
         throw "$($download.Name) download is incomplete. File size: $($file.Length) bytes."
     }
-    $sample = Get-Content $download.Path -Raw
-    if ($sample -notmatch [regex]::Escape($download.Marker)) {
+
+    $content = Get-Content $download.Path -Raw
+    if ($content -notmatch [regex]::Escape($download.Marker)) {
         throw "$($download.Name) content validation failed."
     }
-    Write-Host "$($download.Name) is stored locally." -ForegroundColor Green
+
+    # Production source-map comments are developer metadata only. Bootstrap and Chart.js
+    # point to optional .map files that are not needed by browsers, but WhiteNoise treats
+    # CSS sourceMappingURL comments as static dependencies. Remove those comments so a
+    # production manifest can be built without shipping development source maps.
+    $content = [regex]::Replace(
+        $content,
+        '(?m)\s*/\*[#@]\s*sourceMappingURL=[^*]+\*/\s*$',
+        ''
+    )
+    $content = [regex]::Replace(
+        $content,
+        '(?m)\s*//[#@]\s*sourceMappingURL=.*$',
+        ''
+    )
+    Set-Content -Path $download.Path -Value $content -Encoding UTF8 -NoNewline
+
+    $cleaned = Get-Content $download.Path -Raw
+    if ($cleaned -match 'sourceMappingURL=') {
+        throw "$($download.Name) still contains a source-map reference after cleanup."
+    }
+    Write-Host "$($download.Name) is stored locally without development source-map references." -ForegroundColor Green
 }
 
 Write-Host "All browser CSS and JavaScript assets are now local to the inventory server." -ForegroundColor Green
