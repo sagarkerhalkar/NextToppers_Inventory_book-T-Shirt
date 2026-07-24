@@ -150,11 +150,12 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 12 * 1024 * 1024
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = "DENY"
 
-# Use application-specific versioned cookie names. This forces a clean cookie pair
-# after switching from direct Waitress access to IIS and prevents stale legacy
-# csrftoken/sessionid cookies from breaking the login POST.
-SESSION_COOKIE_NAME = "nexttoppers_session_v2"
-CSRF_COOKIE_NAME = "nexttoppers_csrf_v2"
+# Version 3 deliberately ignores the old IIS cookies. The login endpoint uses a
+# one-time server-side nonce, while all authenticated application forms use the
+# session-backed Django CSRF secret instead of a separate browser CSRF cookie.
+SESSION_COOKIE_NAME = "nexttoppers_session_v3"
+CSRF_COOKIE_NAME = "nexttoppers_csrf_v3"
+CSRF_USE_SESSIONS = True
 SESSION_COOKIE_PATH = "/"
 CSRF_COOKIE_PATH = "/"
 SESSION_COOKIE_SAMESITE = "Lax"
