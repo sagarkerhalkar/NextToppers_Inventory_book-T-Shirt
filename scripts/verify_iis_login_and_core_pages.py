@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import http.client
+import json
 import os
 import re
 import sys
@@ -20,11 +21,7 @@ import django  # noqa: E402
 django.setup()
 
 from django.conf import settings  # noqa: E402
-from django.contrib.auth import (  # noqa: E402
-    BACKEND_SESSION_KEY,
-    HASH_SESSION_KEY,
-    SESSION_KEY,
-)
+from django.contrib.auth import BACKEND_SESSION_KEY, HASH_SESSION_KEY, SESSION_KEY  # noqa: E402
 from django.contrib.sessions.backends.db import SessionStore  # noqa: E402
 
 from inventory.models import User  # noqa: E402
@@ -49,7 +46,7 @@ def request(
     try:
         request_headers = {
             "Host": f"{host}:{port}",
-            "User-Agent": "NextToppersInventoryIisLoginVerifier/1.0",
+            "User-Agent": "NextToppersInventoryIisLoginVerifier/3.0",
             "Connection": "close",
         }
         request_headers.update(headers or {})
@@ -69,56 +66,53 @@ def cookies_from(headers: list[tuple[str, str]]) -> dict[str, str]:
         parsed = SimpleCookie()
         parsed.load(value)
         for key, morsel in parsed.items():
-            cookies[key] = morsel.value
+            if morsel.value:
+                cookies[key] = morsel.value
     return cookies
-
-
-def csrf_token_from(html: bytes) -> str:
-    match = re.search(rb'name="csrfmiddlewaretoken" value="([^"]+)"', html)
-    if not match:
-        raise RuntimeError("The login page did not contain a CSRF form token.")
-    return match.group(1).decode("ascii")
 
 
 def cookie_header(values: dict[str, str]) -> str:
     return "; ".join(f"{name}={value}" for name, value in values.items())
 
 
-def verify_csrf_login_post(host: str, port: int, timeout: float) -> None:
-    origin = f"http://{host}:{port}"
-    login_path = "/login/?next=/"
+def hidden_value(html: bytes, field_name: str) -> str:
+    pattern = rb'name="' + re.escape(field_name.encode("ascii")) + rb'" value="([^"]+)"'
+    match = re.search(pattern, html)
+    if not match:
+        raise RuntimeError(f"The page did not contain hidden field {field_name}.")
+    return match.group(1).decode("ascii")
 
-    status, reason, headers, login_html = request(
-        host,
-        port,
-        "GET",
-        login_path,
-        timeout=timeout,
-    )
+
+def verify_nonce_login_post(host: str, port: int, timeout: float) -> None:
+    origin = f"http://{host}:{port}"
+    login_path = "/login/?fresh=1"
+
+    status, reason, headers, login_html = request(host, port, "GET", login_path, timeout=timeout)
     print(f"GET {origin}{login_path} -> HTTP {status} {reason}", flush=True)
     require(status == 200, f"Login GET returned HTTP {status}")
-    require(b"csrfmiddlewaretoken" in login_html, "Login GET did not render a CSRF token")
+    require(b'name="login_nonce"' in login_html, "Login GET did not render the one-time nonce")
+    require(b'name="csrfmiddlewaretoken"' not in login_html, "Login still depends on the failing CSRF cookie")
 
     cookies = cookies_from(headers)
     require(
-        settings.CSRF_COOKIE_NAME in cookies,
-        f"Login GET did not set the expected CSRF cookie {settings.CSRF_COOKIE_NAME}",
+        settings.SESSION_COOKIE_NAME in cookies,
+        f"Login GET did not set pre-authentication session cookie {settings.SESSION_COOKIE_NAME}",
     )
-    token = csrf_token_from(login_html)
+    nonce = hidden_value(login_html, "login_nonce")
 
     post_body = urlencode(
         {
-            "username": "__INVALID_CSRF_PROBE__",
+            "username": "__INVALID_NONCE_PROBE__",
             "password": "invalid-password",
-            "csrfmiddlewaretoken": token,
+            "login_nonce": nonce,
         }
     ).encode("ascii")
 
-    status, reason, _, post_html = request(
+    status, reason, response_headers, post_html = request(
         host,
         port,
         "POST",
-        login_path,
+        "/login/",
         body=post_body,
         timeout=timeout,
         headers={
@@ -129,14 +123,17 @@ def verify_csrf_login_post(host: str, port: int, timeout: float) -> None:
             "Referer": f"{origin}{login_path}",
         },
     )
-    print(f"POST {origin}{login_path} with CSRF cookie/token -> HTTP {status} {reason}", flush=True)
-    require(status == 200, f"CSRF-protected login POST returned HTTP {status}")
-    require(
-        b"Login User ID or password is incorrect." in post_html,
-        "Login POST was not accepted by CSRF and processed by Django LoginView",
-    )
-    require(b"CSRF verification failed" not in post_html, "Login POST returned a CSRF failure page")
-    print("LIVE_CSRF_LOGIN_POST_OK", flush=True)
+    print(f"POST {origin}/login/ with one-time nonce -> HTTP {status} {reason}", flush=True)
+    require(status == 200, f"Nonce-protected login POST returned HTTP {status}")
+    require(b"Login User ID or password is incorrect." in post_html, "Login POST did not reach Django LoginView")
+    require(b"Security verification failed" not in post_html, "Login POST returned a security failure")
+    require(b'name="login_nonce"' in post_html, "Invalid-password response did not rotate the login nonce")
+
+    refreshed = cookies_from(response_headers)
+    if settings.SESSION_COOKIE_NAME in refreshed:
+        cookies[settings.SESSION_COOKIE_NAME] = refreshed[settings.SESSION_COOKIE_NAME]
+
+    print("LIVE_NONCE_LOGIN_POST_OK", flush=True)
 
 
 def choose_test_user() -> User:
@@ -166,7 +163,7 @@ def choose_test_user() -> User:
     if user:
         return user
 
-    raise RuntimeError("No active Admin/Super Admin with a completed password was available for the temporary session check.")
+    raise RuntimeError("No active Admin/Super Admin is available for authenticated verification.")
 
 
 def create_temporary_authenticated_session(user: User) -> SessionStore:
@@ -179,13 +176,14 @@ def create_temporary_authenticated_session(user: User) -> SessionStore:
     return session
 
 
-def verify_authenticated_core_pages(host: str, port: int, timeout: float) -> None:
+def verify_authenticated_core_pages_and_csrf(host: str, port: int, timeout: float) -> None:
+    origin = f"http://{host}:{port}"
     user = choose_test_user()
     session = create_temporary_authenticated_session(user)
     require(session.session_key, "Temporary authenticated session key was not created")
 
     try:
-        cookie = f"{settings.SESSION_COOKIE_NAME}={session.session_key}"
+        cookies = {settings.SESSION_COOKIE_NAME: session.session_key}
         paths = (
             "/",
             "/books/",
@@ -196,23 +194,59 @@ def verify_authenticated_core_pages(host: str, port: int, timeout: float) -> Non
         )
 
         for path in paths:
-            status, reason, _, content = request(
+            status, reason, response_headers, content = request(
                 host,
                 port,
                 "GET",
                 path,
                 timeout=timeout,
-                headers={"Cookie": cookie},
+                headers={"Cookie": cookie_header(cookies)},
             )
-            print(f"AUTH GET http://{host}:{port}{path} -> HTTP {status} {reason}", flush=True)
+            print(f"AUTH GET {origin}{path} -> HTTP {status} {reason}", flush=True)
             require(status == 200, f"Authenticated core page {path} returned HTTP {status}")
-            require(b"csrfmiddlewaretoken" not in content or b"GLOBAL INVENTORY COMMAND CENTER" in content or path != "/", "Dashboard redirected to the login form")
             require(b"Login User ID" not in content, f"Authenticated core page {path} redirected to login")
-            require(b"CSRF verification failed" not in content, f"CSRF failure content appeared on {path}")
+            require(b"Security verification failed" not in content, f"Security failure content appeared on {path}")
             require(b"Forbidden (403)" not in content, f"Forbidden content appeared on {path}")
             require(b"Server Error" not in content, f"Server error content appeared on {path}")
+            updated = cookies_from(response_headers)
+            if settings.SESSION_COOKIE_NAME in updated:
+                cookies[settings.SESSION_COOKIE_NAME] = updated[settings.SESSION_COOKIE_NAME]
 
-        print(f"LIVE_AUTHENTICATED_CORE_PAGES_OK using {user.employee_id}", flush=True)
+        status, reason, response_headers, token_body = request(
+            host,
+            port,
+            "GET",
+            "/health/session-csrf-token/",
+            timeout=timeout,
+            headers={"Cookie": cookie_header(cookies)},
+        )
+        print(f"AUTH GET {origin}/health/session-csrf-token/ -> HTTP {status} {reason}", flush=True)
+        require(status == 200, f"Session CSRF token endpoint returned HTTP {status}")
+        token = json.loads(token_body.decode("utf-8"))["csrfToken"]
+        updated = cookies_from(response_headers)
+        if settings.SESSION_COOKIE_NAME in updated:
+            cookies[settings.SESSION_COOKIE_NAME] = updated[settings.SESSION_COOKIE_NAME]
+
+        status, reason, _, probe_body = request(
+            host,
+            port,
+            "POST",
+            "/health/session-csrf-probe/",
+            timeout=timeout,
+            headers={
+                "Cookie": cookie_header(cookies),
+                "Origin": origin,
+                "Referer": f"{origin}/",
+                "X-CSRFToken": token,
+                "Content-Length": "0",
+            },
+            body=b"",
+        )
+        print(f"AUTH POST {origin}/health/session-csrf-probe/ -> HTTP {status} {reason}", flush=True)
+        require(status == 200, f"Authenticated session-CSRF POST returned HTTP {status}")
+        require(probe_body == b"SESSION_CSRF_OK", "Session-CSRF probe marker was incorrect")
+
+        print(f"LIVE_AUTHENTICATED_CORE_PAGES_AND_CSRF_OK using {user.employee_id}", flush=True)
     finally:
         if session.session_key:
             session.delete(session.session_key)
@@ -221,16 +255,16 @@ def verify_authenticated_core_pages(host: str, port: int, timeout: float) -> Non
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Verify IIS login CSRF POST and authenticated core application pages without knowing a password."
+        description="Verify nonce login, authenticated core pages and session-backed CSRF through IIS."
     )
     parser.add_argument("host", nargs="?", default="156.156.40.51")
     parser.add_argument("port", nargs="?", type=int, default=3458)
     parser.add_argument("--timeout", type=float, default=90.0)
     args = parser.parse_args()
 
-    verify_csrf_login_post(args.host, args.port, args.timeout)
-    verify_authenticated_core_pages(args.host, args.port, args.timeout)
-    print("IIS_LOGIN_AND_APPLICATION_LOGIC_VERIFIED", flush=True)
+    verify_nonce_login_post(args.host, args.port, args.timeout)
+    verify_authenticated_core_pages_and_csrf(args.host, args.port, args.timeout)
+    print("IIS_NONCE_LOGIN_AND_APPLICATION_LOGIC_VERIFIED", flush=True)
     return 0
 
 
@@ -238,5 +272,5 @@ if __name__ == "__main__":
     try:
         raise SystemExit(main())
     except Exception as exc:
-        print(f"IIS_LOGIN_AND_APPLICATION_LOGIC_FAILED: {type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
+        print(f"IIS_NONCE_LOGIN_AND_APPLICATION_LOGIC_FAILED: {type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
         raise SystemExit(1)
