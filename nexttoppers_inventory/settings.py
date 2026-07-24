@@ -40,13 +40,22 @@ MEDIA_DIRECTORY = _resolve_path("MEDIA_PATH", LOCAL_DATA_DIR / "media")
 DATABASE_FILE.parent.mkdir(parents=True, exist_ok=True)
 MEDIA_DIRECTORY.mkdir(parents=True, exist_ok=True)
 
+PUBLIC_INVENTORY_HOST = os.getenv("INVENTORY_PUBLIC_HOST", "156.156.40.51").strip() or "156.156.40.51"
+PUBLIC_INVENTORY_PORT = int(os.getenv("INVENTORY_PUBLIC_PORT", "3458"))
+PUBLIC_INVENTORY_ORIGIN = f"http://{PUBLIC_INVENTORY_HOST}:{PUBLIC_INVENTORY_PORT}"
+
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "development-only-change-me")
 DEBUG = os.getenv("DJANGO_DEBUG", "True").lower() == "true"
 _configured_hosts = {x.strip() for x in os.getenv("DJANGO_ALLOWED_HOSTS", "").split(",") if x.strip()}
-ALLOWED_HOSTS = sorted(_configured_hosts | _local_ipv4_hosts())
+ALLOWED_HOSTS = sorted(_configured_hosts | _local_ipv4_hosts() | {PUBLIC_INVENTORY_HOST})
 _configured_origins = {x.strip() for x in os.getenv("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",") if x.strip()}
 _lan_origins = {f"http://{host}:3458" for host in _local_ipv4_hosts()}
-CSRF_TRUSTED_ORIGINS = sorted(_configured_origins | _lan_origins)
+CSRF_TRUSTED_ORIGINS = sorted(_configured_origins | _lan_origins | {PUBLIC_INVENTORY_ORIGIN})
+
+# IIS preserves the browser Host header. These settings also support an explicit
+# X-Forwarded-Host header if ARR supplies one later.
+USE_X_FORWARDED_HOST = True
+USE_X_FORWARDED_PORT = True
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -140,5 +149,38 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 8 * 1024 * 1024
 DATA_UPLOAD_MAX_MEMORY_SIZE = 12 * 1024 * 1024
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = "DENY"
+
+# Use application-specific versioned cookie names. This forces a clean cookie pair
+# after switching from direct Waitress access to IIS and prevents stale legacy
+# csrftoken/sessionid cookies from breaking the login POST.
+SESSION_COOKIE_NAME = "nexttoppers_session_v2"
+CSRF_COOKIE_NAME = "nexttoppers_csrf_v2"
+SESSION_COOKIE_PATH = "/"
+CSRF_COOKIE_PATH = "/"
+SESSION_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_SAMESITE = "Lax"
+SESSION_COOKIE_SECURE = False
+CSRF_COOKIE_SECURE = False
 SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = True
+CSRF_FAILURE_VIEW = "nexttoppers_inventory.csrf_views.csrf_failure"
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "csrf_file": {
+            "class": "logging.FileHandler",
+            "filename": str(LOCAL_DATA_DIR / "logs" / "csrf.log"),
+            "encoding": "utf-8",
+        },
+    },
+    "loggers": {
+        "django.security.csrf": {
+            "handlers": ["csrf_file"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+    },
+}
+(LOCAL_DATA_DIR / "logs").mkdir(parents=True, exist_ok=True)
