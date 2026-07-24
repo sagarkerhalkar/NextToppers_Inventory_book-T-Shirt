@@ -16,6 +16,12 @@ class IisOfflineDeploymentTests(SimpleTestCase):
         self.assertIn("vendor/bootstrap/bootstrap.bundle.min.js", base)
         self.assertIn("vendor/chartjs/chart.umd.min.js", dashboard)
 
+    def test_offline_asset_script_removes_source_map_dependencies(self):
+        script = (Path(settings.BASE_DIR) / "scripts" / "download_offline_assets.ps1").read_text(encoding="utf-8")
+        self.assertIn("sourceMappingURL=", script)
+        self.assertIn("[regex]::Replace", script)
+        self.assertIn("still contains a source-map reference", script)
+
     def test_waitress_backend_is_loopback_only(self):
         silent = (Path(settings.BASE_DIR) / "scripts" / "start_server_silent.ps1").read_text(encoding="utf-8")
         visible = (Path(settings.BASE_DIR) / "scripts" / "start_windows.ps1").read_text(encoding="utf-8")
