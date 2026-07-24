@@ -73,6 +73,10 @@ MIDDLEWARE = [
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.locale.LocaleMiddleware",
     "django.middleware.common.CommonMiddleware",
+    # Must run before Django's CSRF middleware. It rewrites only the literal
+    # Origin:null value received from managed Chrome for the three approved
+    # internal hosts. Django still validates the normal CSRF session token.
+    "nexttoppers_inventory.middleware.InternalNullOriginCompatibilityMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "inventory.middleware.ForcePasswordChangeMiddleware",
