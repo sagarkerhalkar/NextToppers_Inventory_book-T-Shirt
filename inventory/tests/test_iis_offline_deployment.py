@@ -12,15 +12,12 @@ class IisOfflineDeploymentTests(SimpleTestCase):
         self.assertNotIn("fonts.googleapis.com", combined)
         self.assertNotIn("fonts.gstatic.com", combined)
         self.assertNotIn("cdn.jsdelivr.net", combined)
+        self.assertNotIn("chart.umd.min.js", dashboard)
+        self.assertNotIn("new Chart(", dashboard)
         self.assertIn("vendor/bootstrap/bootstrap.min.css", base)
         self.assertIn("vendor/bootstrap/bootstrap.bundle.min.js", base)
-        self.assertIn("vendor/chartjs/chart.umd.min.js", dashboard)
-
-    def test_offline_asset_script_removes_source_map_dependencies(self):
-        script = (Path(settings.BASE_DIR) / "scripts" / "download_offline_assets.ps1").read_text(encoding="utf-8")
-        self.assertIn("sourceMappingURL=", script)
-        self.assertIn("[regex]::Replace", script)
-        self.assertIn("still contains a source-map reference", script)
+        self.assertIn("local-bar-chart", dashboard)
+        self.assertIn("local-donut", dashboard)
 
     def test_waitress_backend_is_loopback_only(self):
         silent = (Path(settings.BASE_DIR) / "scripts" / "start_server_silent.ps1").read_text(encoding="utf-8")
@@ -37,3 +34,9 @@ class IisOfflineDeploymentTests(SimpleTestCase):
         self.assertIn("BackendPort = 3460", script)
         self.assertIn("download.microsoft.com", script)
         self.assertIn("Get-AuthenticodeSignature", script)
+
+    def test_offline_asset_script_does_not_download_chart_library(self):
+        script = (Path(settings.BASE_DIR) / "scripts" / "download_offline_assets.ps1").read_text(encoding="utf-8")
+        self.assertNotIn("chart.js@", script.lower())
+        self.assertNotIn("chart.umd.min.js", script.lower())
+        self.assertIn("No Chart.js download is required", script)
