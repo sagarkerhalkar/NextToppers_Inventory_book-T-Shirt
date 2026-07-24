@@ -18,8 +18,8 @@
 <nav class="navbar navbar-expand-xl navbar-dark app-navbar sticky-top">
   <div class="container-fluid px-lg-4">
     <a class="navbar-brand d-flex align-items-center gap-2" href="{% url 'inventory:dashboard' %}">
-      {% if branding and branding.app_logo %}<img src="{{ branding.app_logo.url }}" class="nav-logo" alt="Logo">{% else %}<span class="brand-cube">NT</span>{% endif %}
-      <span><b>{{ branding.organization_name|default:'Next Toppers' }}</b><small>Global Inventory</small></span>
+      {% if branding and branding.app_logo %}<img src="{{ branding.app_logo.url }}" class="nav-logo" alt="{{ branding.organization_name|default:'Next Toppers' }} Logo">{% else %}<span class="brand-cube">NT</span>{% endif %}
+      <span><b>{{ branding.organization_name|default:'Next Toppers Inventory System' }}</b><small>Global Inventory</small></span>
     </a>
     <button class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#menu"><span class="navbar-toggler-icon"></span></button>
     <div class="collapse navbar-collapse" id="menu">
@@ -32,7 +32,7 @@
         {% if user.role == 'ADMIN' or user.role == 'SUPER_ADMIN' %}<li class="nav-item dropdown"><a class="nav-link dropdown-toggle" data-bs-toggle="dropdown" href="#">Administration</a><ul class="dropdown-menu"><li><a class="dropdown-item" href="{% url 'inventory:login_user_list' %}">Login Users</a></li><li><a class="dropdown-item" href="{% url 'inventory:bulk_import' %}">Excel Imports</a></li><li><a class="dropdown-item" href="{% url 'inventory:branding' %}">Branding</a></li>{% if user.role == 'SUPER_ADMIN' %}<li><a class="dropdown-item" href="{% url 'inventory:download_database_backup' %}">Database Backup</a></li>{% endif %}</ul></li>{% endif %}
       </ul>
       <div class="user-chip"><span class="user-avatar">{{ user.full_name|slice:':1'|upper }}</span><span><b>{{ user.employee_id }}</b><small>{{ user.get_role_display }}</small></span></div>
-      <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="btn btn-outline-light btn-sm ms-xl-2">Logout</button></form>
+      <a class="btn btn-outline-light btn-sm ms-xl-2" href="{% url 'logout' %}">Logout</a>
     </div>
   </div>
 </nav>
