@@ -66,7 +66,9 @@ class IisCsrfAndApplicationFlowTests(TestCase):
             follow=True,
         )
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "GLOBAL INVENTORY COMMAND CENTER")
+        self.assertContains(response, "Next Toppers Inventory System")
+        self.assertContains(response, 'data-inventory-tab="books"')
+        self.assertContains(response, 'data-inventory-tab="tshirts"')
 
         for path in (
             "/",
