@@ -3,9 +3,7 @@ $AppRoot = Split-Path $PSScriptRoot -Parent
 Set-Location $AppRoot
 
 $BootstrapRoot = Join-Path $AppRoot "static\vendor\bootstrap"
-$ChartRoot = Join-Path $AppRoot "static\vendor\chartjs"
 New-Item -ItemType Directory -Path $BootstrapRoot -Force | Out-Null
-New-Item -ItemType Directory -Path $ChartRoot -Force | Out-Null
 
 $downloads = @(
     @{
@@ -21,13 +19,6 @@ $downloads = @(
         Path = Join-Path $BootstrapRoot "bootstrap.bundle.min.js"
         MinimumBytes = 70000
         Marker = "Bootstrap"
-    },
-    @{
-        Name = "Chart.js"
-        Url = "https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"
-        Path = Join-Path $ChartRoot "chart.umd.min.js"
-        MinimumBytes = 150000
-        Marker = "Chart.js"
     }
 )
 
@@ -39,33 +30,28 @@ foreach ($download in $downloads) {
     if ($file.Length -lt $download.MinimumBytes) {
         throw "$($download.Name) download is incomplete. File size: $($file.Length) bytes."
     }
-
     $content = Get-Content $download.Path -Raw
     if ($content -notmatch [regex]::Escape($download.Marker)) {
         throw "$($download.Name) content validation failed."
     }
 
-    # Production source-map comments are developer metadata only. Bootstrap and Chart.js
-    # point to optional .map files that are not needed by browsers, but WhiteNoise treats
-    # CSS sourceMappingURL comments as static dependencies. Remove those comments so a
-    # production manifest can be built without shipping development source maps.
-    $content = [regex]::Replace(
-        $content,
-        '(?m)\s*/\*[#@]\s*sourceMappingURL=[^*]+\*/\s*$',
-        ''
-    )
-    $content = [regex]::Replace(
-        $content,
-        '(?m)\s*//[#@]\s*sourceMappingURL=.*$',
-        ''
-    )
+    # Source maps are optional developer files. Remove their references so the
+    # WhiteNoise production manifest does not require unnecessary .map files.
+    $content = $content -replace '(?m)^\s*/\*# sourceMappingURL=.*?\*/\s*$', ''
+    $content = $content -replace '(?m)^\s*//# sourceMappingURL=.*?\s*$', ''
     Set-Content -Path $download.Path -Value $content -Encoding UTF8 -NoNewline
 
-    $cleaned = Get-Content $download.Path -Raw
-    if ($cleaned -match 'sourceMappingURL=') {
-        throw "$($download.Name) still contains a source-map reference after cleanup."
+    if ((Get-Content $download.Path -Raw) -match 'sourceMappingURL=') {
+        throw "$($download.Name) still contains a source-map dependency after cleanup."
     }
     Write-Host "$($download.Name) is stored locally without development source-map references." -ForegroundColor Green
 }
 
-Write-Host "All browser CSS and JavaScript assets are now local to the inventory server." -ForegroundColor Green
+# Chart.js is intentionally not downloaded. The dashboard uses a lightweight
+# local HTML/CSS/JavaScript chart implementation, avoiding another CDN/library.
+$OldChartRoot = Join-Path $AppRoot "static\vendor\chartjs"
+if (Test-Path $OldChartRoot) {
+    Remove-Item $OldChartRoot -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+Write-Host "All required browser assets are local. No Chart.js download is required." -ForegroundColor Green
