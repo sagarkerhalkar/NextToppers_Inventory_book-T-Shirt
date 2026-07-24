@@ -6,19 +6,31 @@ from django.urls import reverse
 
 
 class IisOfflineDeploymentTests(SimpleTestCase):
-    def test_templates_do_not_call_external_cdn_assets(self):
-        base = (Path(settings.BASE_DIR) / "templates" / "inventory" / "base.html").read_text(encoding="utf-8")
-        dashboard = (Path(settings.BASE_DIR) / "templates" / "inventory" / "dashboard.html").read_text(encoding="utf-8")
-        combined = base + dashboard
+    def test_all_user_templates_do_not_call_external_cdn_assets(self):
+        template_paths = [
+            Path(settings.BASE_DIR) / "templates" / "inventory" / "base.html",
+            Path(settings.BASE_DIR) / "templates" / "inventory" / "dashboard.html",
+            Path(settings.BASE_DIR) / "templates" / "registration" / "login.html",
+        ]
+        combined = "\n".join(path.read_text(encoding="utf-8") for path in template_paths)
         self.assertNotIn("fonts.googleapis.com", combined)
         self.assertNotIn("fonts.gstatic.com", combined)
         self.assertNotIn("cdn.jsdelivr.net", combined)
-        self.assertNotIn("chart.umd.min.js", dashboard)
-        self.assertNotIn("new Chart(", dashboard)
-        self.assertIn("vendor/bootstrap/bootstrap.min.css", base)
+        self.assertNotIn("chart.umd.min.js", combined)
+        self.assertNotIn("new Chart(", combined)
+        self.assertIn("vendor/bootstrap/bootstrap.min.css", combined)
+
+        base = template_paths[0].read_text(encoding="utf-8")
+        dashboard = template_paths[1].read_text(encoding="utf-8")
+        login = template_paths[2].read_text(encoding="utf-8")
         self.assertIn("vendor/bootstrap/bootstrap.bundle.min.js", base)
+        self.assertIn("vendor/bootstrap/bootstrap.min.css", login)
         self.assertIn("local-bar-chart", dashboard)
         self.assertIn("local-donut", dashboard)
+
+    def test_static_and_media_urls_are_absolute_for_nested_iis_routes(self):
+        self.assertEqual(settings.STATIC_URL, "/static/")
+        self.assertEqual(settings.MEDIA_URL, "/media/")
 
     def test_health_endpoint_is_plain_and_does_not_require_login(self):
         response = self.client.get(reverse("health_check"))
