@@ -10,11 +10,11 @@ ROOT = Path(__file__).resolve().parent.parent
 ASSETS = {
     Path("static/vendor/bootstrap/bootstrap.min.css"): {
         "url": "https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css",
-        "sha256": "001fd1edbd9965625fba16c885b2429f5687683c25c30a5069ddc02fd79af949",
+        "sha256": "9a821bde8fb0ae52535b0a318cdf1717a4da8a2cdffeec14d223d346a9348cd8",
     },
     Path("static/vendor/bootstrap/bootstrap.bundle.min.js"): {
         "url": "https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js",
-        "sha256": "dbfea97d54111bd6f5364954df4fe8716a133c3309c517b80e2e16005f40790e",
+        "sha256": "c938e1227260834371896291dd5d28e98b5743ec952b721bdf791744ab06810d",
     },
 }
 
