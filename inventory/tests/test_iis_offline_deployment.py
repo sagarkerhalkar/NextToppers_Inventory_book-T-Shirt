@@ -1,3 +1,4 @@
+import importlib.util
 from pathlib import Path
 
 from django.conf import settings
@@ -27,6 +28,27 @@ class IisOfflineDeploymentTests(SimpleTestCase):
         self.assertIn("vendor/bootstrap/bootstrap.min.css", login)
         self.assertIn("local-bar-chart", dashboard)
         self.assertIn("local-donut", dashboard)
+
+    def test_runtime_preflight_accepts_white_noise_versioned_bootstrap_url(self):
+        script_path = Path(settings.BASE_DIR) / "scripts" / "runtime_preflight.py"
+        spec = importlib.util.spec_from_file_location("runtime_preflight_test_module", script_path)
+        module = importlib.util.module_from_spec(spec)
+        assert spec and spec.loader
+        spec.loader.exec_module(module)
+
+        exact = b'<link rel="stylesheet" href="/static/vendor/bootstrap/bootstrap.min.css">'
+        versioned = b'<link rel="stylesheet" href="/static/vendor/bootstrap/bootstrap.min.91f1e82f74e7.css">'
+        self.assertEqual(module.bootstrap_stylesheet_from(exact), "/static/vendor/bootstrap/bootstrap.min.css")
+        self.assertEqual(
+            module.bootstrap_stylesheet_from(versioned),
+            "/static/vendor/bootstrap/bootstrap.min.91f1e82f74e7.css",
+        )
+
+    def test_live_verifier_fetches_generated_bootstrap_path(self):
+        verifier = (Path(settings.BASE_DIR) / "scripts" / "live_site_verifier.py").read_text(encoding="utf-8")
+        self.assertIn("find_bootstrap_path(login)", verifier)
+        self.assertIn("fetch(host, port, bootstrap_path", verifier)
+        self.assertNotIn("/static/vendor/bootstrap/bootstrap.min.css\"", verifier)
 
     def test_static_and_media_urls_are_absolute_for_nested_iis_routes(self):
         self.assertEqual(settings.STATIC_URL, "/static/")
