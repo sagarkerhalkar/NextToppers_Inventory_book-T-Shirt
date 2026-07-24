@@ -16,7 +16,6 @@ def health_check(request):
 
 
 @login_required
-
 def session_csrf_token(request):
     return JsonResponse({"csrfToken": get_token(request)})
 
