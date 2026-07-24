@@ -2,23 +2,27 @@ from __future__ import annotations
 
 import secrets
 
-from django.contrib.auth import views as auth_views
-from django.http import HttpRequest, HttpResponse
-from django.utils.decorators import method_decorator
-from django.views.decorators.csrf import csrf_exempt
+from django.conf import settings
+from django.contrib.auth import REDIRECT_FIELD_NAME, login as auth_login
+from django.contrib.auth.forms import AuthenticationForm
+from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
+from django.shortcuts import resolve_url
+from django.utils.http import url_has_allowed_host_and_scheme
+from django.views.generic.edit import FormView
 
 
-@method_decorator(csrf_exempt, name="dispatch")
-class InternalNonceLoginView(auth_views.LoginView):
-    """Login protected by a one-time server-side nonce instead of a CSRF cookie.
+class InternalNonceLoginView(FormView):
+    """Authenticate with a one-time server-side nonce instead of a CSRF cookie.
 
-    The IIS deployment was intermittently rejecting the browser login POST before
-    authentication.  This view keeps login-CSRF protection without depending on
-    the separate CSRF cookie: a nonce is stored in the pre-authentication session
-    and must be returned by the form exactly once.
+    Django's built-in LoginView adds an internal csrf_protect decorator. This
+    standalone FormView intentionally avoids that wrapper while preserving the
+    same AuthenticationForm, password validation, session rotation and safe
+    redirect behaviour.
     """
 
     template_name = "registration/login.html"
+    form_class = AuthenticationForm
+    redirect_field_name = REDIRECT_FIELD_NAME
     nonce_session_key = "_nexttoppers_login_nonce"
     old_cookie_names = (
         "csrftoken",
@@ -33,10 +37,23 @@ class InternalNonceLoginView(auth_views.LoginView):
         self.request.session.modified = True
         return nonce
 
+    def dispatch(self, request: HttpRequest, *args, **kwargs) -> HttpResponse:
+        if request.user.is_authenticated:
+            return HttpResponseRedirect(self.get_success_url())
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["request"] = self.request
+        return kwargs
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         nonce = self.request.session.get(self.nonce_session_key) or self._issue_nonce()
+        redirect_value = self.get_redirect_url()
         context["login_nonce"] = nonce
+        context["redirect_field_name"] = self.redirect_field_name
+        context["redirect_field_value"] = redirect_value
         return context
 
     def get(self, request: HttpRequest, *args, **kwargs) -> HttpResponse:
@@ -52,7 +69,8 @@ class InternalNonceLoginView(auth_views.LoginView):
         expected = request.session.pop(self.nonce_session_key, "")
         nonce_is_valid = bool(supplied and expected) and secrets.compare_digest(supplied, expected)
 
-        # Rotate immediately so an invalid-password response gets a fresh nonce.
+        # Every POST rotates the nonce. An invalid-password response therefore gets
+        # a fresh value and an old browser form cannot be replayed.
         self._issue_nonce()
 
         if not nonce_is_valid:
@@ -62,6 +80,20 @@ class InternalNonceLoginView(auth_views.LoginView):
 
         return super().post(request, *args, **kwargs)
 
-    def form_valid(self, form):
+    def get_redirect_url(self) -> str:
+        candidate = self.request.POST.get(self.redirect_field_name) or self.request.GET.get(self.redirect_field_name)
+        if candidate and url_has_allowed_host_and_scheme(
+            url=candidate,
+            allowed_hosts={self.request.get_host()},
+            require_https=self.request.is_secure(),
+        ):
+            return candidate
+        return ""
+
+    def get_success_url(self) -> str:
+        return self.get_redirect_url() or resolve_url(settings.LOGIN_REDIRECT_URL)
+
+    def form_valid(self, form: AuthenticationForm) -> HttpResponse:
         self.request.session.pop(self.nonce_session_key, None)
-        return super().form_valid(form)
+        auth_login(self.request, form.get_user())
+        return HttpResponseRedirect(self.get_success_url())
