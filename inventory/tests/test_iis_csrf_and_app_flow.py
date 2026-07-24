@@ -15,7 +15,7 @@ class IisCsrfAndApplicationFlowTests(TestCase):
         cls.user = User.objects.create_user(
             employee_id="NXTTP9001",
             full_name="IIS Flow Test Admin",
-            mobile_number="9876509001",
+            mobile_number="+919876509001",
             password="Test1234",
             role=User.Role.SUPER_ADMIN,
             is_active=True,
