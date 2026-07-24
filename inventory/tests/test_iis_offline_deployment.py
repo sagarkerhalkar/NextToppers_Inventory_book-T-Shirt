@@ -2,6 +2,7 @@ from pathlib import Path
 
 from django.conf import settings
 from django.test import SimpleTestCase
+from django.urls import reverse
 
 
 class IisOfflineDeploymentTests(SimpleTestCase):
@@ -18,6 +19,12 @@ class IisOfflineDeploymentTests(SimpleTestCase):
         self.assertIn("vendor/bootstrap/bootstrap.bundle.min.js", base)
         self.assertIn("local-bar-chart", dashboard)
         self.assertIn("local-donut", dashboard)
+
+    def test_health_endpoint_is_plain_and_does_not_require_login(self):
+        response = self.client.get(reverse("health_check"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, b"NEXT_TOPPERS_INVENTORY_OK")
+        self.assertEqual(response["Content-Type"], "text/plain")
 
     def test_waitress_backend_is_loopback_only_and_starts_executable_directly(self):
         silent = (Path(settings.BASE_DIR) / "scripts" / "start_server_silent.ps1").read_text(encoding="utf-8")
