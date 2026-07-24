@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import sys
+from html.parser import HTMLParser
 from pathlib import Path
 
 APP_ROOT = Path(__file__).resolve().parent.parent
@@ -21,9 +22,34 @@ from django.test import Client  # noqa: E402
 from inventory.models import BrandingSettings  # noqa: E402
 
 
+class StylesheetParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.stylesheets: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag.lower() != "link":
+            return
+        values = {name.lower(): value or "" for name, value in attrs}
+        if "stylesheet" in values.get("rel", "").lower() and values.get("href"):
+            self.stylesheets.append(values["href"])
+
+
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise RuntimeError(message)
+
+
+def bootstrap_stylesheet_from(html: bytes) -> str:
+    parser = StylesheetParser()
+    parser.feed(html.decode("utf-8", errors="replace"))
+    for href in parser.stylesheets:
+        if href.startswith("/static/vendor/bootstrap/bootstrap.min") and href.endswith(".css"):
+            return href
+    raise RuntimeError(
+        "Login page does not reference a local Bootstrap stylesheet. "
+        f"Stylesheets returned: {parser.stylesheets}"
+    )
 
 
 def main() -> int:
@@ -54,10 +80,8 @@ def main() -> int:
     print("6/6 Login page is fully local")
     for forbidden in (b"fonts.googleapis.com", b"fonts.gstatic.com", b"cdn.jsdelivr.net"):
         require(forbidden not in login.content, f"Login page still contains external dependency: {forbidden.decode()}")
-    require(
-        b"/static/vendor/bootstrap/bootstrap.min.css" in login.content,
-        "Login page does not reference the local Bootstrap stylesheet",
-    )
+    bootstrap_href = bootstrap_stylesheet_from(login.content)
+    print(f"Local Bootstrap stylesheet: {bootstrap_href}")
 
     print("RUNTIME_PREFLIGHT_OK")
     return 0
