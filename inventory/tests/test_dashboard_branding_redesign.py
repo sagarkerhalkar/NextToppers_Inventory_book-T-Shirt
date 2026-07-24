@@ -56,14 +56,18 @@ class DashboardBrandingRedesignTests(TestCase):
         client.force_login(self.admin)
         page = client.get("/settings/branding/")
         self.assertEqual(page.status_code, 200)
-        match = re.search(rb'name="branding_nonce" value="([^"]+)"', page.content)
-        self.assertIsNotNone(match)
-        self.assertNotContains(page, 'name="csrfmiddlewaretoken"', status_code=200)
+        html = page.content.decode("utf-8")
+        form_match = re.search(r'<form[^>]+id="brandingForm".*?</form>', html, re.S)
+        self.assertIsNotNone(form_match)
+        branding_form_html = form_match.group(0)
+        nonce_match = re.search(r'name="branding_nonce" value="([^"]+)"', branding_form_html)
+        self.assertIsNotNone(nonce_match)
+        self.assertNotIn('name="csrfmiddlewaretoken"', branding_form_html)
 
         response = client.post(
             "/settings/branding/",
             {
-                "branding_nonce": match.group(1).decode("ascii"),
+                "branding_nonce": nonce_match.group(1),
                 "organization_name": "Next Toppers Inventory System",
                 "app_logo": self._png("new-logo.png"),
             },
