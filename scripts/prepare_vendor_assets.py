@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 import sys
 import urllib.request
 from pathlib import Path
@@ -25,9 +26,16 @@ def sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def normalize(data: bytes) -> bytes:
+    if data.startswith(b"\xef\xbb\xbf"):
+        data = data[3:]
+    data = re.sub(rb"/\*# sourceMappingURL=[^*]+\*/\s*$", b"", data)
+    data = re.sub(rb"//# sourceMappingURL=.*?\s*$", b"", data)
+    return data.rstrip() + b"\n"
+
+
 def valid(data: bytes, marker: bytes, minimum_size: int) -> bool:
-    normalized = data[3:] if data.startswith(b"\xef\xbb\xbf") else data
-    return len(normalized) >= minimum_size and marker in normalized[:500]
+    return len(data) >= minimum_size and marker in data[:500]
 
 
 def prepare(relative_path: Path, metadata: dict[str, object]) -> None:
@@ -36,8 +44,9 @@ def prepare(relative_path: Path, metadata: dict[str, object]) -> None:
     minimum_size = metadata["minimum_size"]
 
     if target.exists():
-        existing = target.read_bytes()
+        existing = normalize(target.read_bytes())
         if valid(existing, marker, minimum_size):
+            target.write_bytes(existing)
             print(f"OK {relative_path} sha256={sha256_bytes(existing)}")
             return
 
@@ -46,7 +55,7 @@ def prepare(relative_path: Path, metadata: dict[str, object]) -> None:
     request = urllib.request.Request(str(metadata["url"]), headers={"User-Agent": "NextToppersInventoryBuild/1.0"})
     try:
         with urllib.request.urlopen(request, timeout=60) as response:
-            data = response.read()
+            data = normalize(response.read())
         if not valid(data, marker, minimum_size):
             raise RuntimeError(f"Downloaded file failed version/size verification for {relative_path}")
         temporary.write_bytes(data)
