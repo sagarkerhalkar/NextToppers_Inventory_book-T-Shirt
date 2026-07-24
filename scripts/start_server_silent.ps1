@@ -4,7 +4,6 @@ $LogRoot = Join-Path $env:LOCALAPPDATA "NextToppersInventory\logs"
 $LogFile = Join-Path $LogRoot "server.log"
 $StdoutLog = Join-Path $LogRoot "backend_stdout.log"
 $StderrLog = Join-Path $LogRoot "backend_stderr.log"
-$PreflightLog = Join-Path $LogRoot "backend_preflight.log"
 $PidFile = Join-Path $LogRoot "backend.pid"
 $BackendPort = 3460
 
@@ -20,7 +19,6 @@ function Write-ServerLog {
 for ($attempt = 1; $attempt -le 18; $attempt++) {
     if (
         (Test-Path (Join-Path $AppRoot "manage.py")) -and
-        (Test-Path (Join-Path $AppRoot ".venv\Scripts\python.exe")) -and
         (Test-Path (Join-Path $AppRoot ".venv\Scripts\waitress-serve.exe"))
     ) {
         break
@@ -28,10 +26,9 @@ for ($attempt = 1; $attempt -le 18; $attempt++) {
     Start-Sleep -Seconds 10
 }
 
-$PythonExe = Join-Path $AppRoot ".venv\Scripts\python.exe"
 $WaitressExe = Join-Path $AppRoot ".venv\Scripts\waitress-serve.exe"
-if (-not (Test-Path $PythonExe) -or -not (Test-Path $WaitressExe)) {
-    Write-ServerLog "Auto-start failed: Python environment or Waitress executable is unavailable."
+if (-not (Test-Path $WaitressExe)) {
+    Write-ServerLog "Auto-start failed: Waitress executable is unavailable."
     exit 1
 }
 
@@ -42,36 +39,21 @@ if ($Existing) {
 }
 
 Set-Location $AppRoot
-Write-ServerLog "Running Django and WSGI preflight before private backend startup."
-$PreflightOutput = & $PythonExe manage.py check 2>&1
-$PreflightExit = $LASTEXITCODE
-$PreflightOutput | Set-Content -Path $PreflightLog -Encoding UTF8
-if ($PreflightExit -ne 0) {
-    Write-ServerLog "Django preflight failed. See $PreflightLog"
-    exit 1
-}
-
-$WsgiOutput = & $PythonExe -c "from nexttoppers_inventory.wsgi import application; print('WSGI import successful')" 2>&1
-$WsgiExit = $LASTEXITCODE
-$WsgiOutput | Add-Content -Path $PreflightLog -Encoding UTF8
-if ($WsgiExit -ne 0) {
-    Write-ServerLog "WSGI import failed. See $PreflightLog"
-    exit 1
-}
-
 Remove-Item $StdoutLog, $StderrLog -Force -ErrorAction SilentlyContinue
 New-Item -ItemType File -Path $StdoutLog -Force | Out-Null
 New-Item -ItemType File -Path $StderrLog -Force | Out-Null
 Write-ServerLog "Starting Waitress directly on private address 127.0.0.1:$BackendPort."
 
-# Important: start waitress-serve.exe directly. All arguments contain no spaces,
-# so Windows cannot split the Google Drive application path incorrectly.
+# Django and WSGI are verified by the visible installer before this hidden launcher runs.
+# Do not execute native Python preflight commands here: harmless dependency warnings are
+# written to stderr and Windows PowerShell can incorrectly promote them to fatal errors.
 $WaitressArguments = @(
     "--listen=127.0.0.1:$BackendPort",
     "--threads=8",
     "--channel-timeout=120",
     "nexttoppers_inventory.wsgi:application"
 )
+
 $Process = Start-Process `
     -FilePath $WaitressExe `
     -ArgumentList $WaitressArguments `
@@ -97,5 +79,5 @@ for ($attempt = 1; $attempt -le 40; $attempt++) {
 }
 
 Stop-Process -Id $Process.Id -Force -ErrorAction SilentlyContinue
-Write-ServerLog "Private backend did not open port $BackendPort within 40 seconds. See $StderrLog and $PreflightLog"
+Write-ServerLog "Private backend did not open port $BackendPort within 40 seconds. See $StderrLog"
 exit 1
