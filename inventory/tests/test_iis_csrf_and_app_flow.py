@@ -22,53 +22,47 @@ class IisCsrfAndApplicationFlowTests(TestCase):
             must_change_password=False,
         )
 
-    def test_public_iis_origin_accepts_login_csrf_post(self):
-        client = Client(enforce_csrf_checks=True)
-        login = client.get("/login/?next=/", HTTP_HOST=self.public_host)
-        self.assertEqual(login.status_code, 200)
-        self.assertIn(settings.CSRF_COOKIE_NAME, login.cookies)
-
-        match = re.search(
-            rb'name="csrfmiddlewaretoken" value="([^"]+)"',
-            login.content,
-        )
+    def _login_nonce(self, client):
+        response = client.get("/login/?next=/", HTTP_HOST=self.public_host)
+        self.assertEqual(response.status_code, 200)
+        match = re.search(rb'name="login_nonce" value="([^"]+)"', response.content)
         self.assertIsNotNone(match)
-        token = match.group(1).decode("ascii")
+        self.assertIn(settings.SESSION_COOKIE_NAME, response.cookies)
+        self.assertNotContains(response, 'name="csrfmiddlewaretoken"', status_code=200)
+        return match.group(1).decode("ascii")
 
+    def test_invalid_login_post_uses_one_time_session_nonce_not_csrf_cookie(self):
+        client = Client(enforce_csrf_checks=True)
+        nonce = self._login_nonce(client)
         response = client.post(
-            "/login/?next=/",
+            "/login/",
             {
                 "username": "INVALID_USER",
                 "password": "invalid-password",
-                "csrfmiddlewaretoken": token,
+                "login_nonce": nonce,
             },
             HTTP_HOST=self.public_host,
             HTTP_ORIGIN=self.public_origin,
-            HTTP_REFERER=f"{self.public_origin}/login/?next=/",
+            HTTP_REFERER=f"{self.public_origin}/login/",
         )
-
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Login User ID or password is incorrect.")
         self.assertNotContains(response, "CSRF verification failed", status_code=200)
+        self.assertRegex(response.content.decode(), r'name="login_nonce" value="[^"]+"')
 
-    def test_real_login_reaches_dashboard_and_core_application_pages(self):
+    def test_successful_login_reaches_dashboard_and_core_application_pages(self):
         client = Client(enforce_csrf_checks=True)
-        login = client.get("/login/?next=/", HTTP_HOST=self.public_host)
-        token = re.search(
-            rb'name="csrfmiddlewaretoken" value="([^"]+)"',
-            login.content,
-        ).group(1).decode("ascii")
-
+        nonce = self._login_nonce(client)
         response = client.post(
-            "/login/?next=/",
+            "/login/",
             {
                 "username": self.user.employee_id,
                 "password": "Test1234",
-                "csrfmiddlewaretoken": token,
+                "login_nonce": nonce,
             },
             HTTP_HOST=self.public_host,
             HTTP_ORIGIN=self.public_origin,
-            HTTP_REFERER=f"{self.public_origin}/login/?next=/",
+            HTTP_REFERER=f"{self.public_origin}/login/",
             follow=True,
         )
         self.assertEqual(response.status_code, 200)
@@ -86,8 +80,36 @@ class IisCsrfAndApplicationFlowTests(TestCase):
             self.assertEqual(page.status_code, 200, f"Core application page failed: {path}")
             self.assertNotContains(page, "CSRF verification failed", status_code=200)
 
-    def test_public_host_and_origin_are_guaranteed_without_env_file(self):
+        token_response = client.get(
+            "/health/session-csrf-token/",
+            HTTP_HOST=self.public_host,
+        )
+        self.assertEqual(token_response.status_code, 200)
+        token = token_response.json()["csrfToken"]
+        probe = client.post(
+            "/health/session-csrf-probe/",
+            HTTP_HOST=self.public_host,
+            HTTP_ORIGIN=self.public_origin,
+            HTTP_REFERER=f"{self.public_origin}/",
+            HTTP_X_CSRFTOKEN=token,
+        )
+        self.assertEqual(probe.status_code, 200)
+        self.assertEqual(probe.content, b"SESSION_CSRF_OK")
+
+    def test_session_csrf_probe_rejects_missing_token(self):
+        client = Client(enforce_csrf_checks=True)
+        client.force_login(self.user)
+        response = client.post(
+            "/health/session-csrf-probe/",
+            HTTP_HOST=self.public_host,
+            HTTP_ORIGIN=self.public_origin,
+            HTTP_REFERER=f"{self.public_origin}/",
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_public_host_and_session_security_are_guaranteed(self):
         self.assertIn("156.156.40.51", settings.ALLOWED_HOSTS)
         self.assertIn(self.public_origin, settings.CSRF_TRUSTED_ORIGINS)
-        self.assertEqual(settings.CSRF_COOKIE_NAME, "nexttoppers_csrf_v2")
-        self.assertEqual(settings.SESSION_COOKIE_NAME, "nexttoppers_session_v2")
+        self.assertTrue(settings.CSRF_USE_SESSIONS)
+        self.assertEqual(settings.CSRF_COOKIE_NAME, "nexttoppers_csrf_v3")
+        self.assertEqual(settings.SESSION_COOKIE_NAME, "nexttoppers_session_v3")
