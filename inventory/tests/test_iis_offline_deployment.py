@@ -30,8 +30,10 @@ class IisOfflineDeploymentTests(SimpleTestCase):
         self.assertIn("-FilePath $WaitressExe", silent)
         self.assertIn('"--listen=127.0.0.1:$BackendPort"', silent)
         self.assertNotIn('-ArgumentList "`"$Runner`""', silent)
+        self.assertNotIn("manage.py check 2>&1", silent)
+        self.assertNotIn("backend_preflight.log", silent)
+        self.assertIn("harmless dependency warnings", silent)
         self.assertIn("backend_stderr.log", silent)
-        self.assertIn("backend_preflight.log", silent)
         self.assertIn("Start-Process", silent)
 
     def test_iis_script_uses_requested_address_and_microsoft_installers(self):
