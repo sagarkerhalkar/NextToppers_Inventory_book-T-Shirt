@@ -122,11 +122,16 @@ jobs:
           cat browser-server.log
           exit 1
       - name: Test desktop, tablet, Android and iPhone viewports
-        run: python scripts/browser_smoke.py
-      - name: Upload browser server log
+        shell: bash
+        run: |
+          set -o pipefail
+          python scripts/browser_smoke.py 2>&1 | tee browser-smoke.log
+      - name: Upload browser evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: responsive-browser-smoke-log
-          path: browser-server.log
+          name: responsive-browser-smoke-evidence
+          path: |
+            browser-server.log
+            browser-smoke.log
           retention-days: 14
