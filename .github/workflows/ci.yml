@@ -96,9 +96,18 @@ jobs:
       - name: Prepare and verify local Bootstrap assets
         run: python scripts/prepare_vendor_assets.py
       - name: Prepare clean browser-test database
+        shell: bash
         run: |
-          python manage.py migrate --noinput
-          python manage.py shell -c "from inventory.models import User; User.objects.filter(employee_id='NXTTP9000').delete(); User.objects.create_user(employee_id='NXTTP9000', full_name='Release Browser Admin', mobile_number='+919876509000', password='ReleaseTest1234', role=User.Role.SUPER_ADMIN, is_active=True, must_change_password=False)"
+          set -o pipefail
+          python manage.py migrate --noinput 2>&1 | tee browser-db-setup.log
+          python scripts/create_browser_test_user.py 2>&1 | tee -a browser-db-setup.log
+      - name: Upload browser database setup log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-database-setup-log
+          path: browser-db-setup.log
+          retention-days: 14
       - name: Start Django test server
         shell: bash
         run: |
