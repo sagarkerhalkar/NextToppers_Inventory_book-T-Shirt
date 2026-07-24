@@ -11,6 +11,7 @@ def main() -> int:
     parser.add_argument("port", type=int)
     parser.add_argument("path")
     parser.add_argument("--expect", default="")
+    parser.add_argument("--forbid", action="append", default=[])
     parser.add_argument("--timeout", type=float, default=30.0)
     args = parser.parse_args()
 
@@ -38,6 +39,10 @@ def main() -> int:
         print(f"Expected marker not found: {args.expect}", file=sys.stderr)
         print(body[:1000], file=sys.stderr)
         return 3
+    for forbidden in args.forbid:
+        if forbidden in body:
+            print(f"Forbidden external marker found: {forbidden}", file=sys.stderr)
+            return 4
     return 0
 
 
