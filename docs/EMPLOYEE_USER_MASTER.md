@@ -1,6 +1,6 @@
 # Employee and User Master
 
-_Last updated: 22 July 2026_
+_Last updated: 23 July 2026_
 
 This document records the confirmed employee/user master requirements for **Next Toppers Book and T-Shirt Inventory Management**.
 
@@ -17,11 +17,9 @@ This document records the confirmed employee/user master requirements for **Next
 - Spaces, hyphens and other special characters are not allowed in the Employee ID.
 - The user interface and backend must validate the format using the equivalent of `^NXTTP\d{4}$`.
 - Duplicate Employee IDs must be blocked by both the user interface and backend validation.
-- After the employee/user record is created, the Employee ID cannot be changed by Staff, Admin or Super Admin.
-- The Employee ID field must become read-only after creation, and backend APIs must reject any later attempt to change it.
-- A record created with an incorrect Employee ID must be deactivated and a new correctly identified record must be created while preserving the original audit history.
-- Deactivating an account must not release or reuse its Employee ID.
-- Historical records must continue to show the original Employee ID.
+- Admin and Super Admin may correct an Employee ID or Login User ID when it was entered by mistake.
+- Correcting an ID must keep all Book, T-shirt and employee history linked to the same database record.
+- Every ID correction must be recorded in the audit log.
 
 ## 2. Employee Full Name
 
@@ -32,18 +30,19 @@ This document records the confirmed employee/user master requirements for **Next
 
 ## 3. Employee Mobile Number
 
-- Every employee/user must have a mobile number.
-- Mobile number is mandatory.
-- The supported format is Indian mobile format: country code `+91` followed by exactly 10 digits.
-- The application may accept a 10-digit Indian number during entry but must store and display it in normalized `+91XXXXXXXXXX` format.
-- Two employees cannot use the same mobile number.
-- Duplicate mobile numbers must be blocked by both the user interface and backend validation.
+- Mobile number is optional for non-login Employee Master records.
+- Leaving the Employee mobile number blank must not block creation, editing or Excel import.
+- When a mobile number is entered, the supported format is Indian mobile format: country code `+91` followed by exactly 10 digits.
+- Two Employee records cannot use the same supplied mobile number.
+- Blank Employee mobile numbers may be used on multiple employee records.
+- Login User mobile number remains mandatory and unique for account administration.
 - Mobile numbers must be protected as personal data and displayed only to authorized users.
 
 ## 4. Optional Employee Fields
 
-The following employee fields are optional and must not block employee creation when left blank:
+The following Employee Master fields are optional and must not block employee creation when left blank:
 
+- Mobile number
 - Official email address
 - Department
 - Designation
@@ -64,12 +63,21 @@ When an optional email address is supplied, the application must validate its fo
 
 - The login method is Employee ID plus password.
 - Employees will not use self-service forgot-password recovery.
-- When an employee forgets the password, an Admin or Super Admin must perform a secure password reset.
-- The administrator must never be able to view the employee's existing password.
+- When a login user forgets the password, an Admin or Super Admin must perform a secure password reset.
+- The administrator must never be able to view the user's existing password.
 - A reset must create a temporary password or secure reset process.
-- The affected employee must create a new password at the next sign-in.
+- The affected user must create a new password at the next sign-in.
 - Password-reset actions must be recorded in the audit log, but no password may be stored in the audit log.
 
-## 7. Audit and History
+## 7. Deletion and History Safety
 
-The audit log must record employee creation, activation, deactivation, role changes, profile changes, password resets and rejected Employee ID change attempts, including the acting user, affected employee, action, date and time.
+- Admin and Super Admin can delete an Employee Master record that has no protected Book or T-shirt transaction history.
+- An Employee with linked Book or T-shirt history cannot be permanently deleted and must be marked inactive instead.
+- Admin and Super Admin can delete eligible Login Users subject to role permissions.
+- A user cannot delete the account currently signed in.
+- The last active Super Admin cannot be deleted.
+- A Login User linked through protected legacy inventory history cannot be deleted and must be deactivated instead.
+
+## 8. Audit and History
+
+The audit log must record employee creation, ID corrections, deletion, activation, deactivation, role changes, profile changes and password resets, including the acting user, affected employee/user, action, date and time.
