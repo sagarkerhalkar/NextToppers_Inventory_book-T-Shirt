@@ -7,6 +7,7 @@ from inventory.models import AuditLog, Book, BookAllocation, Employee, TshirtBra
 
 class InternalNullOriginPostFlowTests(TestCase):
     public_host = "156.156.40.51:3458"
+    online_host = "nexttpinventory.sagarkerhalkar.com"
 
     @classmethod
     def setUpTestData(cls):
@@ -44,8 +45,11 @@ class InternalNullOriginPostFlowTests(TestCase):
         self.client = Client(enforce_csrf_checks=True)
         self.client.force_login(self.admin)
 
-    def _csrf_token(self, path):
-        response = self.client.get(path, HTTP_HOST=self.public_host)
+    def _csrf_token(self, path, host=None, forwarded_proto=None):
+        extra = {"HTTP_HOST": host or self.public_host}
+        if forwarded_proto:
+            extra["HTTP_X_FORWARDED_PROTO"] = forwarded_proto
+        response = self.client.get(path, **extra)
         self.assertEqual(response.status_code, 200)
         match = re.search(rb'name="csrfmiddlewaretoken" value="([^"]+)"', response.content)
         self.assertIsNotNone(match, f"No CSRF token rendered by {path}")
@@ -94,6 +98,56 @@ class InternalNullOriginPostFlowTests(TestCase):
                 entity_id=str(self.stock.pk),
             ).exists()
         )
+
+    def test_online_https_book_create_accepts_normal_origin(self):
+        path = "/books/add/"
+        token = self._csrf_token(path, host=self.online_host, forwarded_proto="https")
+        response = self.client.post(
+            path,
+            {
+                "csrfmiddlewaretoken": token,
+                "asset_id": "",
+                "name": "Online HTTPS Book",
+                "condition": Book.Condition.GOOD,
+            },
+            HTTP_HOST=self.online_host,
+            HTTP_X_FORWARDED_PROTO="https",
+            HTTP_ORIGIN=f"https://{self.online_host}",
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(Book.objects.filter(name="Online HTTPS Book").exists())
+
+    def test_online_https_book_create_accepts_managed_browser_null_origin(self):
+        path = "/books/add/"
+        token = self._csrf_token(path, host=self.online_host, forwarded_proto="https")
+        response = self.client.post(
+            path,
+            {
+                "csrfmiddlewaretoken": token,
+                "asset_id": "",
+                "name": "Online Null Origin Book",
+                "condition": Book.Condition.GOOD,
+            },
+            HTTP_HOST=self.online_host,
+            HTTP_X_FORWARDED_PROTO="https",
+            HTTP_ORIGIN="null",
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(Book.objects.filter(name="Online Null Origin Book").exists())
+
+    def test_online_null_origin_still_requires_valid_csrf_token(self):
+        path = "/books/add/"
+        response = self.client.post(
+            path,
+            {"asset_id": "", "name": "Must Not Create", "condition": Book.Condition.GOOD},
+            HTTP_HOST=self.online_host,
+            HTTP_X_FORWARDED_PROTO="https",
+            HTTP_ORIGIN="null",
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(Book.objects.filter(name="Must Not Create").exists())
 
     def test_null_origin_still_requires_valid_csrf_token(self):
         path = f"/books/{self.book.pk}/allocate/"
