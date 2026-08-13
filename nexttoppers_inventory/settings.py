@@ -43,19 +43,29 @@ MEDIA_DIRECTORY.mkdir(parents=True, exist_ok=True)
 PUBLIC_INVENTORY_HOST = os.getenv("INVENTORY_PUBLIC_HOST", "156.156.40.51").strip() or "156.156.40.51"
 PUBLIC_INVENTORY_PORT = int(os.getenv("INVENTORY_PUBLIC_PORT", "3458"))
 PUBLIC_INVENTORY_ORIGIN = f"http://{PUBLIC_INVENTORY_HOST}:{PUBLIC_INVENTORY_PORT}"
+PUBLIC_INVENTORY_DOMAIN = os.getenv(
+    "INVENTORY_PUBLIC_DOMAIN", "nexttpinventory.sagarkerhalkar.com"
+).strip().lower() or "nexttpinventory.sagarkerhalkar.com"
+PUBLIC_INVENTORY_HTTPS_ORIGIN = f"https://{PUBLIC_INVENTORY_DOMAIN}"
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "development-only-change-me")
 DEBUG = os.getenv("DJANGO_DEBUG", "True").lower() == "true"
 _configured_hosts = {x.strip() for x in os.getenv("DJANGO_ALLOWED_HOSTS", "").split(",") if x.strip()}
-ALLOWED_HOSTS = sorted(_configured_hosts | _local_ipv4_hosts() | {PUBLIC_INVENTORY_HOST})
+ALLOWED_HOSTS = sorted(_configured_hosts | _local_ipv4_hosts() | {PUBLIC_INVENTORY_HOST, PUBLIC_INVENTORY_DOMAIN})
 _configured_origins = {x.strip() for x in os.getenv("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",") if x.strip()}
 _lan_origins = {f"http://{host}:3458" for host in _local_ipv4_hosts()}
-CSRF_TRUSTED_ORIGINS = sorted(_configured_origins | _lan_origins | {PUBLIC_INVENTORY_ORIGIN})
+CSRF_TRUSTED_ORIGINS = sorted(
+    _configured_origins
+    | _lan_origins
+    | {PUBLIC_INVENTORY_ORIGIN, PUBLIC_INVENTORY_HTTPS_ORIGIN}
+)
 
-# IIS preserves the browser Host header. These settings also support an explicit
-# X-Forwarded-Host header if ARR supplies one later.
+# IIS/Cloudflare preserve the public host and forward the original HTTPS scheme.
+# This allows Django to validate HTTPS Origin/Referer correctly while Waitress
+# itself continues to listen only on local HTTP 127.0.0.1:3460.
 USE_X_FORWARDED_HOST = True
 USE_X_FORWARDED_PORT = True
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -73,9 +83,6 @@ MIDDLEWARE = [
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.locale.LocaleMiddleware",
     "django.middleware.common.CommonMiddleware",
-    # Must run before Django's CSRF middleware. It rewrites only the literal
-    # Origin:null value received from managed Chrome for the three approved
-    # internal hosts. Django still validates the normal CSRF session token.
     "nexttoppers_inventory.middleware.InternalNullOriginCompatibilityMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
