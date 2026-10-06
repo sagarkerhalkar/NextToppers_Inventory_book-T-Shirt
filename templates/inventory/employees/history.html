@@ -6,7 +6,7 @@
 <div class="content-card premium-card" data-feature="employee-book-entry-controls-v2">
   <div class="section-title">
     <div><span class="eyebrow">BOOK LIFECYCLE</span><h2>Allocation and Return Timeline</h2>
-    {% if user.role == 'ADMIN' or user.role == 'SUPER_ADMIN' %}<p class="text-muted mb-0">Admin controls: edit one Book entry, delete one Book entry, or select multiple Book entries and bulk delete them. Employee record is never deleted.</p>{% endif %}</div>
+    <p class="text-muted mb-0">Edit is available to signed-in users. Delete and bulk delete are Super Admin only. Employee record is never deleted.</p></div>
   </div>
   <form class="row g-2 mb-3" method="get">
     <div class="col"><input name="book_q" value="{{ book_query }}" class="form-control" placeholder="Search Book Asset ID, name or return note"></div>
@@ -14,7 +14,7 @@
     <div class="col-auto"><button class="btn btn-outline-primary">Search Books</button></div>
   </form>
 
-  {% if user.role == 'ADMIN' or user.role == 'SUPER_ADMIN' %}
+  {% if user.role == 'SUPER_ADMIN' %}
   <form method="post" action="{% url 'inventory:employee_book_transactions_bulk_delete' employee.pk %}" onsubmit="return confirm('Delete all selected Book transaction entries? The employee will NOT be deleted.');">
     {% csrf_token %}
     <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-2">
@@ -24,13 +24,13 @@
   {% endif %}
   <div class="table-responsive"><table class="table align-middle">
     <thead><tr>
-      {% if user.role == 'ADMIN' or user.role == 'SUPER_ADMIN' %}<th><input type="checkbox" class="form-check-input" onclick="document.querySelectorAll('.book-entry-check').forEach(x=>x.checked=this.checked)" title="Select all Book entries on this page"></th>{% endif %}
+      {% if user.role == 'SUPER_ADMIN' %}<th><input type="checkbox" class="form-check-input" onclick="document.querySelectorAll('.book-entry-check').forEach(x=>x.checked=this.checked)" title="Select all Book entries on this page"></th>{% endif %}
       <th>Book</th><th>Allocated Date & Time</th><th>Allocated By</th><th>Returned Date & Time</th><th>Returned By</th><th>Return Condition</th><th>Return Note</th><th>Status</th><th>Admin Action</th>
     </tr></thead>
     <tbody>
     {% for item in book_history %}
       <tr>
-        {% if user.role == 'ADMIN' or user.role == 'SUPER_ADMIN' %}<td><input type="checkbox" class="form-check-input book-entry-check" name="book_transaction_ids" value="{{ item.pk }}"></td>{% endif %}
+        {% if user.role == 'SUPER_ADMIN' %}<td><input type="checkbox" class="form-check-input book-entry-check" name="book_transaction_ids" value="{{ item.pk }}"></td>{% endif %}
         <td><strong>{{ item.book.asset_id }}</strong><small class="d-block text-muted">{{ item.book.name }}</small></td>
         <td>{{ item.allocated_at|date:'d M Y, h:i:s A' }}</td>
         <td>{{ item.allocated_by.employee_id|default:'-' }}</td>
@@ -39,20 +39,20 @@
         <td>{{ item.get_return_condition_display|default:'-' }}</td>
         <td>{{ item.return_note|default:'-' }}</td>
         <td>{% if item.is_active %}<span class="status-pill live">Currently Allocated</span>{% else %}<span class="status-pill healthy">Returned</span>{% endif %}</td>
-        <td>{% if user.role == 'ADMIN' or user.role == 'SUPER_ADMIN' %}<div class="d-flex flex-wrap gap-1"><a class="btn btn-sm btn-outline-secondary" href="{% url 'inventory:book_allocation_edit' item.pk %}">Edit Book Entry</a><a class="btn btn-sm btn-outline-danger" href="{% url 'inventory:book_allocation_delete' item.pk %}">Delete Book Entry</a></div>{% endif %}</td>
+        <td><div class="d-flex flex-wrap gap-1"><a class="btn btn-sm btn-outline-secondary" href="{% url 'inventory:book_allocation_edit' item.pk %}">Edit Book Entry</a>{% if user.role == 'SUPER_ADMIN' %}<a class="btn btn-sm btn-outline-danger" href="{% url 'inventory:book_allocation_delete' item.pk %}">Delete Book Entry</a>{% endif %}</div></td>
       </tr>
     {% empty %}
       <tr><td colspan="10" class="text-center text-muted py-4">No matching Book history.</td></tr>
     {% endfor %}
     </tbody>
   </table></div>
-  {% if user.role == 'ADMIN' or user.role == 'SUPER_ADMIN' %}</form>{% endif %}
+  {% if user.role == 'SUPER_ADMIN' %}</form>{% endif %}
   {% include 'inventory/includes/pagination.html' with page_obj=book_pagination.page_obj page_size=book_pagination.page_size page_parameter=book_pagination.page_parameter size_parameter=book_pagination.size_parameter page_query=book_pagination.page_query %}
 </div>
 <div class="content-card premium-card mt-4" data-feature="employee-tshirt-entry-controls-v2">
   <div class="section-title">
     <div><span class="eyebrow">T-SHIRT LIFECYCLE</span><h2>Issue Timeline</h2>
-    {% if user.role == 'ADMIN' or user.role == 'SUPER_ADMIN' %}<p class="text-muted mb-0">Admin controls: edit one T-shirt entry, delete one T-shirt entry, or select multiple T-shirt entries and bulk delete them. Employee record is never deleted.</p>{% endif %}</div>
+    <p class="text-muted mb-0">Edit is available to signed-in users. Delete and bulk delete are Super Admin only. Employee record is never deleted.</p></div>
   </div>
   <form class="row g-2 mb-3" method="get">
     <input type="hidden" name="book_q" value="{{ book_query }}">
@@ -60,7 +60,7 @@
     <div class="col-auto"><button class="btn btn-outline-primary">Search T-shirts</button></div>
   </form>
 
-  {% if user.role == 'ADMIN' or user.role == 'SUPER_ADMIN' %}
+  {% if user.role == 'SUPER_ADMIN' %}
   <form method="post" action="{% url 'inventory:employee_tshirt_transactions_bulk_delete' employee.pk %}" onsubmit="return confirm('Delete all selected T-shirt transaction entries? Issued stock will be restored. The employee will NOT be deleted.');">
     {% csrf_token %}
     <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-2">
@@ -70,13 +70,13 @@
   {% endif %}
   <div class="table-responsive"><table class="table align-middle">
     <thead><tr>
-      {% if user.role == 'ADMIN' or user.role == 'SUPER_ADMIN' %}<th><input type="checkbox" class="form-check-input" onclick="document.querySelectorAll('.tshirt-entry-check').forEach(x=>x.checked=this.checked)" title="Select all T-shirt entries on this page"></th>{% endif %}
+      {% if user.role == 'SUPER_ADMIN' %}<th><input type="checkbox" class="form-check-input" onclick="document.querySelectorAll('.tshirt-entry-check').forEach(x=>x.checked=this.checked)" title="Select all T-shirt entries on this page"></th>{% endif %}
       <th>Brand / Size</th><th>Quantity</th><th>Type</th><th>Status</th><th>Requested Date & Time</th><th>Issued Date & Time</th><th>Issued By</th><th>Admin Action</th>
     </tr></thead>
     <tbody>
     {% for item in tshirt_history %}
       <tr>
-        {% if user.role == 'ADMIN' or user.role == 'SUPER_ADMIN' %}<td><input type="checkbox" class="form-check-input tshirt-entry-check" name="tshirt_transaction_ids" value="{{ item.pk }}"></td>{% endif %}
+        {% if user.role == 'SUPER_ADMIN' %}<td><input type="checkbox" class="form-check-input tshirt-entry-check" name="tshirt_transaction_ids" value="{{ item.pk }}"></td>{% endif %}
         <td><strong>{{ item.stock.brand.name }}</strong><small class="d-block text-muted">Size {{ item.stock.size }}</small></td>
         <td>{{ item.quantity }}</td>
         <td>{{ item.get_issue_type_display }}</td>
@@ -84,14 +84,14 @@
         <td>{{ item.requested_at|date:'d M Y, h:i:s A' }}</td>
         <td>{% if item.issued_at %}{{ item.issued_at|date:'d M Y, h:i:s A' }}{% else %}-{% endif %}</td>
         <td>{{ item.issued_by.employee_id|default:'-' }}</td>
-        <td>{% if user.role == 'ADMIN' or user.role == 'SUPER_ADMIN' %}<div class="d-flex flex-wrap gap-1"><a class="btn btn-sm btn-outline-secondary" href="{% url 'inventory:tshirt_allocation_edit' item.pk %}">Edit T-shirt Entry</a><a class="btn btn-sm btn-outline-danger" href="{% url 'inventory:tshirt_allocation_delete' item.pk %}">Delete T-shirt Entry</a></div>{% endif %}</td>
+        <td><div class="d-flex flex-wrap gap-1"><a class="btn btn-sm btn-outline-secondary" href="{% url 'inventory:tshirt_allocation_edit' item.pk %}">Edit T-shirt Entry</a>{% if user.role == 'SUPER_ADMIN' %}<a class="btn btn-sm btn-outline-danger" href="{% url 'inventory:tshirt_allocation_delete' item.pk %}">Delete T-shirt Entry</a>{% endif %}</div></td>
       </tr>
     {% empty %}
       <tr><td colspan="9" class="text-center text-muted py-4">No matching T-shirt history.</td></tr>
     {% endfor %}
     </tbody>
   </table></div>
-  {% if user.role == 'ADMIN' or user.role == 'SUPER_ADMIN' %}</form>{% endif %}
+  {% if user.role == 'SUPER_ADMIN' %}</form>{% endif %}
   {% include 'inventory/includes/pagination.html' with page_obj=tshirt_pagination.page_obj page_size=tshirt_pagination.page_size page_parameter=tshirt_pagination.page_parameter size_parameter=tshirt_pagination.size_parameter page_query=tshirt_pagination.page_query %}
 </div>
 <div class="content-card premium-card mt-4"><div class="section-title"><div><span class="eyebrow">12-MONTH CONTROL</span><h2>Free Entitlement by Brand</h2></div></div><div class="entitlement-grid">{% for row in entitlement_rows %}<div class="entitlement-card"><b>{{ row.brand.name }}</b><div class="entitlement-ring" style="--percent:{% if row.allowance %}{% widthratio row.used row.allowance 100 %}{% else %}0{% endif %}"><strong>{{ row.remaining }}</strong><small>remaining</small></div><p>{{ row.used }} used of {{ row.allowance }} free</p><div class="entitlement-period">{% if row.custom_period %}Employee period: {{ row.period_start|date:'d M Y' }} to {{ row.period_end|date:'d M Y' }}{% else %}Rolling period: {{ row.period_start|date:'d M Y' }} to {{ row.period_end|date:'d M Y' }}{% endif %}</div></div>{% empty %}<p>No active T-shirt brands.</p>{% endfor %}</div></div>
