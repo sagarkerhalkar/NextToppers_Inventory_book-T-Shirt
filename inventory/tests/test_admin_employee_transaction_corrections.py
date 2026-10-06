@@ -140,29 +140,35 @@ class AdminEmployeeTransactionCorrectionTests(TestCase):
         self.assertEqual(self.stock_a.available_quantity, 10)
         self.assertEqual(self.stock_a.allocated_quantity, 0)
 
-    def test_staff_cannot_open_book_transaction_edit(self):
+    def test_staff_can_open_book_transaction_edit(self):
         self.client.force_login(self.staff)
         response = self.client.get(reverse("inventory:book_allocation_edit", args=[self.book_allocation.pk]))
-        self.assertRedirects(response, reverse("inventory:dashboard"))
+        self.assertEqual(response.status_code, 200)
 
-    def test_staff_cannot_open_tshirt_transaction_edit(self):
+    def test_staff_can_open_tshirt_transaction_edit(self):
         self.client.force_login(self.staff)
         response = self.client.get(reverse("inventory:tshirt_allocation_edit", args=[self.tshirt_allocation.pk]))
-        self.assertRedirects(response, reverse("inventory:dashboard"))
+        self.assertEqual(response.status_code, 200)
 
-    def test_admin_delete_book_route(self):
+    def test_super_admin_delete_book_route(self):
+        self.admin.role = User.Role.SUPER_ADMIN
+        self.admin.save(update_fields=["role", "is_staff"])
         self.client.force_login(self.admin)
         response = self.client.post(reverse("inventory:book_allocation_delete", args=[self.book_allocation.pk]))
         self.assertEqual(response.status_code, 302)
         self.assertFalse(BookAllocation.objects.filter(pk=self.book_allocation.pk).exists())
 
-    def test_admin_delete_tshirt_route(self):
+    def test_super_admin_delete_tshirt_route(self):
+        self.admin.role = User.Role.SUPER_ADMIN
+        self.admin.save(update_fields=["role", "is_staff"])
         self.client.force_login(self.admin)
         response = self.client.post(reverse("inventory:tshirt_allocation_delete", args=[self.tshirt_allocation.pk]))
         self.assertEqual(response.status_code, 302)
         self.assertFalse(TshirtAllocation.objects.filter(pk=self.tshirt_allocation.pk).exists())
 
-    def test_admin_book_delete_uses_separate_confirmation_page(self):
+    def test_super_admin_book_delete_uses_separate_confirmation_page(self):
+        self.admin.role = User.Role.SUPER_ADMIN
+        self.admin.save(update_fields=["role", "is_staff"])
         self.client.force_login(self.admin)
         response = self.client.get(reverse("inventory:book_allocation_delete", args=[self.book_allocation.pk]))
         self.assertEqual(response.status_code, 200)
@@ -170,7 +176,9 @@ class AdminEmployeeTransactionCorrectionTests(TestCase):
         self.assertContains(response, "Yes, Delete Book Entry")
         self.assertTrue(BookAllocation.objects.filter(pk=self.book_allocation.pk).exists())
 
-    def test_admin_tshirt_delete_uses_separate_confirmation_page(self):
+    def test_super_admin_tshirt_delete_uses_separate_confirmation_page(self):
+        self.admin.role = User.Role.SUPER_ADMIN
+        self.admin.save(update_fields=["role", "is_staff"])
         self.client.force_login(self.admin)
         response = self.client.get(reverse("inventory:tshirt_allocation_delete", args=[self.tshirt_allocation.pk]))
         self.assertEqual(response.status_code, 200)
@@ -228,7 +236,9 @@ class AdminEmployeeTransactionCorrectionTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertFalse(TshirtAllocation.objects.filter(pk=self.tshirt_allocation.pk).exists())
 
-    def test_employee_history_shows_individual_and_bulk_controls_for_admin(self):
+    def test_employee_history_shows_individual_and_bulk_controls_for_super_admin(self):
+        self.admin.role = User.Role.SUPER_ADMIN
+        self.admin.save(update_fields=["role", "is_staff"])
         self.client.force_login(self.admin)
         response = self.client.get(reverse("inventory:employee_history", args=[self.employee_a.pk]))
         self.assertEqual(response.status_code, 200)
@@ -239,7 +249,9 @@ class AdminEmployeeTransactionCorrectionTests(TestCase):
         self.assertContains(response, "Delete T-shirt Entry")
         self.assertContains(response, "Delete Selected T-shirt Entries")
 
-    def test_admin_can_bulk_delete_selected_book_entries_without_deleting_employee(self):
+    def test_super_admin_can_bulk_delete_selected_book_entries_without_deleting_employee(self):
+        self.admin.role = User.Role.SUPER_ADMIN
+        self.admin.save(update_fields=["role", "is_staff"])
         second_book = Book.objects.create(
             asset_id="TRXBOOK2",
             name="Transaction Book 2",
@@ -267,7 +279,9 @@ class AdminEmployeeTransactionCorrectionTests(TestCase):
         self.assertEqual(self.book.status, Book.Status.IN_LIBRARY)
         self.assertEqual(second_book.status, Book.Status.IN_LIBRARY)
 
-    def test_admin_can_bulk_delete_selected_tshirt_entries_and_restore_stock(self):
+    def test_super_admin_can_bulk_delete_selected_tshirt_entries_and_restore_stock(self):
+        self.admin.role = User.Role.SUPER_ADMIN
+        self.admin.save(update_fields=["role", "is_staff"])
         second_allocation = TshirtAllocation.objects.create(
             employee_record=self.employee_a,
             stock=self.stock_b,
@@ -297,4 +311,34 @@ class AdminEmployeeTransactionCorrectionTests(TestCase):
         self.assertEqual(self.stock_a.allocated_quantity, 0)
         self.assertEqual(self.stock_b.available_quantity, 20)
         self.assertEqual(self.stock_b.allocated_quantity, 0)
+
+    def test_admin_cannot_delete_book_transaction(self):
+        self.client.force_login(self.admin)
+        response = self.client.post(reverse("inventory:book_allocation_delete", args=[self.book_allocation.pk]))
+        self.assertRedirects(response, reverse("inventory:dashboard"))
+        self.assertTrue(BookAllocation.objects.filter(pk=self.book_allocation.pk).exists())
+
+    def test_admin_cannot_delete_tshirt_transaction(self):
+        self.client.force_login(self.admin)
+        response = self.client.post(reverse("inventory:tshirt_allocation_delete", args=[self.tshirt_allocation.pk]))
+        self.assertRedirects(response, reverse("inventory:dashboard"))
+        self.assertTrue(TshirtAllocation.objects.filter(pk=self.tshirt_allocation.pk).exists())
+
+    def test_staff_cannot_bulk_delete_book_transactions(self):
+        self.client.force_login(self.staff)
+        response = self.client.post(
+            reverse("inventory:employee_book_transactions_bulk_delete", args=[self.employee_a.pk]),
+            {"book_transaction_ids": [str(self.book_allocation.pk)]},
+        )
+        self.assertRedirects(response, reverse("inventory:dashboard"))
+        self.assertTrue(BookAllocation.objects.filter(pk=self.book_allocation.pk).exists())
+
+    def test_staff_cannot_bulk_delete_tshirt_transactions(self):
+        self.client.force_login(self.staff)
+        response = self.client.post(
+            reverse("inventory:employee_tshirt_transactions_bulk_delete", args=[self.employee_a.pk]),
+            {"tshirt_transaction_ids": [str(self.tshirt_allocation.pk)]},
+        )
+        self.assertRedirects(response, reverse("inventory:dashboard"))
+        self.assertTrue(TshirtAllocation.objects.filter(pk=self.tshirt_allocation.pk).exists())
 
