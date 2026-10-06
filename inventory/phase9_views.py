@@ -8,10 +8,17 @@ from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
 from .enhanced_forms import TshirtStockCorrectionForm
-from .forms import BookAllocationForm, BookReturnForm, EmployeeRecordForm, FreeTshirtIssueForm, PaidTshirtRequestForm
+from .forms import (
+    BookAllocationAdminEditForm, BookAllocationForm, BookReturnForm, EmployeeRecordForm,
+    FreeTshirtIssueForm, PaidTshirtRequestForm, TshirtAllocationAdminEditForm,
+)
 from .models import Book, BookAllocation, Employee, TshirtAllocation, TshirtStock, User
 from .permissions import role_required
-from .services import allocate_book, audit, create_paid_tshirt_request, issue_free_tshirts, return_book
+from .services import (
+    admin_delete_book_allocation, admin_delete_tshirt_allocation,
+    admin_edit_book_allocation, admin_edit_tshirt_allocation,
+    allocate_book, audit, create_paid_tshirt_request, issue_free_tshirts, return_book,
+)
 
 
 @login_required
@@ -198,6 +205,116 @@ def paid_tshirt_request(request):
         "title": "Paid T-shirt Request",
         "help_text": "Search Employee and stock. Upload payment and HR approval documents. A past request/entry date may be recorded.",
     })
+
+
+@role_required(User.Role.ADMIN, User.Role.SUPER_ADMIN)
+def book_allocation_edit(request, pk):
+    allocation = get_object_or_404(
+        BookAllocation.objects.select_related("book", "employee", "employee_record"),
+        pk=pk,
+    )
+    initial = {
+        "employee": allocation.employee_record_id or allocation.employee_id,
+        "allocated_at": allocation.allocated_at,
+        "allocation_status": (
+            BookAllocationAdminEditForm.STATUS_ACTIVE
+            if allocation.is_active
+            else BookAllocationAdminEditForm.STATUS_RETURNED
+        ),
+        "returned_at": allocation.returned_at,
+        "return_condition": allocation.return_condition,
+        "return_note": allocation.return_note,
+    }
+    form = BookAllocationAdminEditForm(request.POST or None, initial=initial)
+    if request.method == "POST" and form.is_valid():
+        try:
+            updated = admin_edit_book_allocation(
+                allocation=allocation,
+                employee=form.cleaned_data["employee"],
+                allocated_at=form.cleaned_data["allocated_at"],
+                allocation_status=form.cleaned_data["allocation_status"],
+                returned_at=form.cleaned_data.get("returned_at"),
+                return_condition=form.cleaned_data.get("return_condition") or "",
+                return_note=form.cleaned_data.get("return_note") or "",
+                actor=request.user,
+            )
+            messages.success(request, "Book employee transaction updated and inventory status recalculated.")
+            return redirect("inventory:employee_history", pk=updated.employee_record_id)
+        except ValueError as exc:
+            form.add_error(None, str(exc))
+    return render(request, "inventory/generic_form.html", {
+        "form": form,
+        "title": f"Edit Book Transaction: {allocation.book.asset_id}",
+        "help_text": "Admin correction. Employee, allocation/return dates and return details can be corrected. Inventory status is recalculated automatically.",
+    })
+
+
+@role_required(User.Role.ADMIN, User.Role.SUPER_ADMIN)
+def book_allocation_delete(request, pk):
+    allocation = get_object_or_404(
+        BookAllocation.objects.select_related("book", "employee", "employee_record"),
+        pk=pk,
+    )
+    employee_pk = allocation.employee_record_id
+    if request.method == "POST":
+        admin_delete_book_allocation(allocation=allocation, actor=request.user)
+        messages.success(request, "Book employee transaction deleted and Book availability recalculated.")
+    if employee_pk:
+        return redirect("inventory:employee_history", pk=employee_pk)
+    return redirect("inventory:book_history")
+
+
+@role_required(User.Role.ADMIN, User.Role.SUPER_ADMIN)
+def tshirt_allocation_edit(request, pk):
+    allocation = get_object_or_404(
+        TshirtAllocation.objects.select_related("stock", "stock__brand", "employee", "employee_record"),
+        pk=pk,
+    )
+    initial = {
+        "employee": allocation.employee_record_id or allocation.employee_id,
+        "stock": allocation.stock_id,
+        "quantity": allocation.quantity,
+        "requested_at": allocation.requested_at,
+        "issued_at": allocation.issued_at,
+    }
+    form = TshirtAllocationAdminEditForm(request.POST or None, initial=initial, allocation=allocation)
+    if request.method == "POST" and form.is_valid():
+        try:
+            updated = admin_edit_tshirt_allocation(
+                allocation=allocation,
+                employee=form.cleaned_data["employee"],
+                stock=form.cleaned_data["stock"],
+                quantity=form.cleaned_data["quantity"],
+                requested_at=form.cleaned_data["requested_at"],
+                issued_at=form.cleaned_data.get("issued_at"),
+                actor=request.user,
+            )
+            messages.success(request, "T-shirt employee transaction updated and stock recalculated.")
+            return redirect("inventory:employee_history", pk=updated.employee_record_id)
+        except ValueError as exc:
+            form.add_error(None, str(exc))
+    return render(request, "inventory/generic_form.html", {
+        "form": form,
+        "title": f"Edit T-shirt Transaction #{allocation.pk}",
+        "help_text": "Admin correction. Employee, T-shirt stock, quantity and dates can be corrected. Issued stock is recalculated automatically.",
+    })
+
+
+@role_required(User.Role.ADMIN, User.Role.SUPER_ADMIN)
+def tshirt_allocation_delete(request, pk):
+    allocation = get_object_or_404(
+        TshirtAllocation.objects.select_related("stock", "stock__brand", "employee", "employee_record"),
+        pk=pk,
+    )
+    employee_pk = allocation.employee_record_id
+    if request.method == "POST":
+        admin_delete_tshirt_allocation(allocation=allocation, actor=request.user)
+        messages.success(request, "T-shirt employee transaction deleted and stock restored automatically.")
+    if employee_pk:
+        return redirect("inventory:employee_history", pk=employee_pk)
+    return redirect("inventory:tshirt_allocation_list")
+
+
 
 
 @role_required(User.Role.ADMIN, User.Role.SUPER_ADMIN)
