@@ -1,0 +1,43 @@
+{% extends 'inventory/base.html' %}{% block title %}T-shirt Purchase History{% endblock %}
+{% block content %}
+<div class="hero-panel">
+  <div><span class="eyebrow">ADMIN STOCK CONTROL</span><h1>T-shirt Purchase History</h1><p>Admins can correct or remove purchase entries while stock totals remain consistent.</p></div>
+  <div class="d-flex gap-2 flex-wrap"><a href="{% url 'inventory:tshirt_stock_list' %}" class="btn btn-light">Back to Stock</a><a href="{% url 'inventory:tshirt_purchase_create' %}" class="btn btn-primary btn-glow">+ Add Purchase</a></div>
+</div>
+<div class="content-card premium-card mt-4">
+<form class="row g-2 mb-3" method="get">
+  <div class="col"><input name="q" value="{{ query }}" class="form-control" placeholder="Search brand, size, vendor or bill number"></div>
+  <div class="col-auto"><button class="btn btn-outline-primary">Search</button></div>
+  {% if query %}<div class="col-auto"><a class="btn btn-outline-secondary" href="{% url 'inventory:tshirt_purchase_list' %}">Clear</a></div>{% endif %}
+</form>
+<div class="table-responsive">
+<table class="table align-middle premium-table">
+<thead><tr><th>Date</th><th>Brand / Size</th><th>Vendor</th><th>Bill No.</th><th>Qty</th><th>Total Cost</th><th>Entered By</th><th>Action</th></tr></thead>
+<tbody>
+{% for row in purchases %}
+<tr>
+  <td>{{ row.purchase_date|date:'d M Y' }}</td>
+  <td><strong>{{ row.stock.brand.name }}</strong><small class="d-block text-muted">Size {{ row.stock.size }}</small></td>
+  <td>{{ row.vendor|default:'-' }}</td>
+  <td>{{ row.bill_number|default:'-' }}</td>
+  <td><span class="quantity-bubble">{{ row.quantity }}</span></td>
+  <td>{{ row.total_cost }}</td>
+  <td>{{ row.created_by.employee_id|default:'-' }}</td>
+  <td>
+    <div class="d-flex flex-wrap gap-1">
+      <a class="btn btn-sm btn-outline-secondary" href="{% url 'inventory:tshirt_purchase_edit' row.pk %}">Edit</a>
+      {% if row.bill_photo %}<a class="btn btn-sm btn-outline-primary" href="{% url 'inventory:tshirt_purchase_document' row.pk %}">Bill</a>{% endif %}
+      <form method="post" action="{% url 'inventory:tshirt_purchase_delete' row.pk %}" onsubmit="return confirm('Delete this T-shirt purchase? Available stock will be reduced by this purchase quantity.')">
+        {% csrf_token %}<button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
+      </form>
+    </div>
+  </td>
+</tr>
+{% empty %}
+<tr><td colspan="8" class="text-center text-muted py-5">No T-shirt purchase entries found.</td></tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+</div>
+{% endblock %}
