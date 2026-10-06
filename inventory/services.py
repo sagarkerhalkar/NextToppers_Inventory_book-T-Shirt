@@ -235,6 +235,205 @@ def reject_paid_tshirt_request(*, allocation, reason, actor):
     return allocation
 
 
+@transaction.atomic
+def admin_edit_book_allocation(*, allocation, employee, allocated_at, allocation_status, returned_at, return_condition, return_note, actor):
+    locked = (
+        BookAllocation.objects.select_for_update()
+        .select_related("book", "employee", "employee_record")
+        .get(pk=allocation.pk)
+    )
+    book = Book.objects.select_for_update().get(pk=locked.book_id)
+    old = {
+        "employee": getattr(locked.recipient, "employee_id", ""),
+        "allocated_at": locked.allocated_at.isoformat() if locked.allocated_at else "",
+        "is_active": locked.is_active,
+        "returned_at": locked.returned_at.isoformat() if locked.returned_at else "",
+        "return_condition": locked.return_condition,
+        "return_note": locked.return_note,
+    }
+
+    entry_time = _entry_datetime(allocated_at, "Allocation date and time")
+    is_returned = allocation_status == "RETURNED"
+    if is_returned:
+        return_time = _entry_datetime(returned_at, "Return date and time")
+        if return_time < entry_time:
+            raise ValueError("Return date and time cannot be before allocation date and time.")
+        if not return_condition:
+            raise ValueError("Return condition is required.")
+        if not (return_note or "").strip():
+            raise ValueError("Return note is required.")
+    else:
+        return_time = None
+        if BookAllocation.objects.filter(book_id=book.pk, is_active=True).exclude(pk=locked.pk).exists():
+            raise ValueError("This Book already has another active allocation.")
+
+    locked.employee = None
+    locked.employee_record = employee
+    locked.allocated_at = entry_time
+    locked.is_active = not is_returned
+    locked.returned_at = return_time
+    locked.return_condition = return_condition if is_returned else ""
+    locked.return_note = (return_note or "").strip() if is_returned else ""
+    locked.returned_by = actor if is_returned else None
+    locked.save()
+
+    latest = BookAllocation.objects.filter(book_id=book.pk).order_by("-allocated_at", "-pk").first()
+    active_exists = BookAllocation.objects.filter(book_id=book.pk, is_active=True).exists()
+    if active_exists:
+        book.status = Book.Status.ALLOCATED
+    elif latest:
+        if latest.return_condition:
+            book.condition = latest.return_condition
+        book.status = {
+            Book.Condition.LOST: Book.Status.LOST,
+            Book.Condition.DAMAGED: Book.Status.DAMAGED,
+        }.get(book.condition, Book.Status.IN_LIBRARY)
+    else:
+        book.status = {
+            Book.Condition.LOST: Book.Status.LOST,
+            Book.Condition.DAMAGED: Book.Status.DAMAGED,
+        }.get(book.condition, Book.Status.IN_LIBRARY)
+    book.save(update_fields=["condition", "status", "updated_at"])
+
+    audit(
+        actor,
+        "BOOK_ALLOCATION_EDITED",
+        locked,
+        f"Corrected Book transaction {book.asset_id} for {employee.employee_id}",
+        metadata={"previous": old},
+    )
+    return locked
+
+
+@transaction.atomic
+def admin_delete_book_allocation(*, allocation, actor):
+    locked = (
+        BookAllocation.objects.select_for_update()
+        .select_related("book", "employee", "employee_record")
+        .get(pk=allocation.pk)
+    )
+    book = Book.objects.select_for_update().get(pk=locked.book_id)
+    description = (
+        f"Deleted Book transaction {book.asset_id} / "
+        f"{getattr(locked.recipient, 'employee_id', '-')}"
+    )
+    metadata = {
+        "allocated_at": locked.allocated_at.isoformat() if locked.allocated_at else "",
+        "returned_at": locked.returned_at.isoformat() if locked.returned_at else "",
+        "was_active": locked.is_active,
+    }
+    audit(actor, "BOOK_ALLOCATION_DELETED", locked, description, metadata=metadata)
+    locked.delete()
+
+    latest = BookAllocation.objects.filter(book_id=book.pk).order_by("-allocated_at", "-pk").first()
+    active_exists = BookAllocation.objects.filter(book_id=book.pk, is_active=True).exists()
+    if active_exists:
+        book.status = Book.Status.ALLOCATED
+    elif latest and latest.return_condition:
+        book.condition = latest.return_condition
+        book.status = {
+            Book.Condition.LOST: Book.Status.LOST,
+            Book.Condition.DAMAGED: Book.Status.DAMAGED,
+        }.get(book.condition, Book.Status.IN_LIBRARY)
+    else:
+        book.status = {
+            Book.Condition.LOST: Book.Status.LOST,
+            Book.Condition.DAMAGED: Book.Status.DAMAGED,
+        }.get(book.condition, Book.Status.IN_LIBRARY)
+    book.save(update_fields=["condition", "status", "updated_at"])
+
+
+@transaction.atomic
+def admin_edit_tshirt_allocation(*, allocation, employee, stock, quantity, requested_at, issued_at, actor):
+    locked = (
+        TshirtAllocation.objects.select_for_update()
+        .select_related("stock", "stock__brand", "employee", "employee_record")
+        .get(pk=allocation.pk)
+    )
+    old_stock = TshirtStock.objects.select_for_update().get(pk=locked.stock_id)
+    new_stock = old_stock if stock.pk == old_stock.pk else TshirtStock.objects.select_for_update().get(pk=stock.pk)
+    old = {
+        "employee": getattr(locked.recipient, "employee_id", ""),
+        "stock_id": locked.stock_id,
+        "quantity": locked.quantity,
+        "requested_at": locked.requested_at.isoformat() if locked.requested_at else "",
+        "issued_at": locked.issued_at.isoformat() if locked.issued_at else "",
+        "status": locked.status,
+        "issue_type": locked.issue_type,
+    }
+
+    request_time = _entry_datetime(requested_at, "T-shirt request date and time")
+    if quantity < 1:
+        raise ValueError("Quantity must be at least 1.")
+
+    if locked.status == TshirtAllocation.Status.ISSUED:
+        issue_time = _entry_datetime(issued_at or requested_at, "T-shirt issue date and time")
+        old_stock.available_quantity += locked.quantity
+        old_stock.allocated_quantity = max(0, old_stock.allocated_quantity - locked.quantity)
+        old_stock.save(update_fields=["available_quantity", "allocated_quantity", "updated_at"])
+
+        if new_stock.pk != old_stock.pk:
+            new_stock.refresh_from_db(fields=["available_quantity", "allocated_quantity"])
+        if new_stock.available_quantity < quantity:
+            raise ValueError("T-shirt stock is insufficient for this correction.")
+        new_stock.available_quantity -= quantity
+        new_stock.allocated_quantity += quantity
+        new_stock.save(update_fields=["available_quantity", "allocated_quantity", "updated_at"])
+    else:
+        issue_time = locked.issued_at
+
+    locked.employee = None
+    locked.employee_record = employee
+    locked.stock = new_stock
+    locked.quantity = quantity
+    locked.requested_at = request_time
+    if locked.status == TshirtAllocation.Status.ISSUED:
+        locked.issued_at = issue_time
+        locked.issued_by = actor
+    locked.save()
+
+    audit(
+        actor,
+        "TSHIRT_ALLOCATION_EDITED",
+        locked,
+        f"Corrected T-shirt transaction #{locked.pk} for {employee.employee_id}",
+        metadata={"previous": old},
+    )
+    return locked
+
+
+@transaction.atomic
+def admin_delete_tshirt_allocation(*, allocation, actor):
+    locked = (
+        TshirtAllocation.objects.select_for_update()
+        .select_related("stock", "stock__brand", "employee", "employee_record")
+        .get(pk=allocation.pk)
+    )
+    stock = TshirtStock.objects.select_for_update().get(pk=locked.stock_id)
+    metadata = {
+        "employee": getattr(locked.recipient, "employee_id", ""),
+        "stock_id": locked.stock_id,
+        "quantity": locked.quantity,
+        "status": locked.status,
+        "issue_type": locked.issue_type,
+        "requested_at": locked.requested_at.isoformat() if locked.requested_at else "",
+        "issued_at": locked.issued_at.isoformat() if locked.issued_at else "",
+    }
+    if locked.status == TshirtAllocation.Status.ISSUED:
+        stock.available_quantity += locked.quantity
+        stock.allocated_quantity = max(0, stock.allocated_quantity - locked.quantity)
+        stock.save(update_fields=["available_quantity", "allocated_quantity", "updated_at"])
+    audit(
+        actor,
+        "TSHIRT_ALLOCATION_DELETED",
+        locked,
+        f"Deleted T-shirt transaction #{locked.pk} for {getattr(locked.recipient, 'employee_id', '-')}",
+        metadata=metadata,
+    )
+    locked.delete()
+
+
+
 def _deliver_email(log_id, email_address):
     close_old_connections()
     try:
