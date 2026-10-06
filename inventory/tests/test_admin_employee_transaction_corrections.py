@@ -161,3 +161,20 @@ class AdminEmployeeTransactionCorrectionTests(TestCase):
         response = self.client.post(reverse("inventory:tshirt_allocation_delete", args=[self.tshirt_allocation.pk]))
         self.assertEqual(response.status_code, 302)
         self.assertFalse(TshirtAllocation.objects.filter(pk=self.tshirt_allocation.pk).exists())
+
+    def test_admin_book_delete_uses_separate_confirmation_page(self):
+        self.client.force_login(self.admin)
+        response = self.client.get(reverse("inventory:book_allocation_delete", args=[self.book_allocation.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Delete Book Employee Entry")
+        self.assertContains(response, "Yes, Delete Book Entry")
+        self.assertTrue(BookAllocation.objects.filter(pk=self.book_allocation.pk).exists())
+
+    def test_admin_tshirt_delete_uses_separate_confirmation_page(self):
+        self.client.force_login(self.admin)
+        response = self.client.get(reverse("inventory:tshirt_allocation_delete", args=[self.tshirt_allocation.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Delete T-shirt Employee Entry")
+        self.assertContains(response, "Yes, Delete T-shirt Entry")
+        self.assertTrue(TshirtAllocation.objects.filter(pk=self.tshirt_allocation.pk).exists())
+
