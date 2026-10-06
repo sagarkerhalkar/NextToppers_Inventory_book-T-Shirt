@@ -4,7 +4,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 
-from .models import BrandingSettings, Book, Employee, TshirtBrand, TshirtPurchase, TshirtStock, User
+from .models import BrandingSettings, Book, Employee, TshirtAllocation, TshirtBrand, TshirtPurchase, TshirtStock, User
 from .widgets import AjaxSearchSelect
 
 
@@ -193,6 +193,75 @@ class BookReturnForm(StyledFormMixin, forms.Form):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self._style_fields()
+
+
+class BookAllocationAdminEditForm(StyledFormMixin, forms.Form):
+    STATUS_ACTIVE = "ACTIVE"
+    STATUS_RETURNED = "RETURNED"
+
+    employee = forms.ModelChoiceField(
+        queryset=Employee.objects.none(),
+        widget=AjaxSearchSelect("inventory:employee_autocomplete", "Search Employee ID, name or mobile"),
+    )
+    allocated_at = _past_datetime_field("Allocation Date & Time")
+    allocation_status = forms.ChoiceField(
+        choices=[(STATUS_ACTIVE, "Currently Allocated"), (STATUS_RETURNED, "Returned")]
+    )
+    returned_at = _past_datetime_field("Return Date & Time")
+    return_condition = forms.ChoiceField(
+        required=False,
+        choices=[("", "---------")] + list(Book.Condition.choices),
+    )
+    return_note = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 3}))
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        queryset = Employee.objects.filter(is_active=True).order_by("employee_id")
+        self.fields["employee"].queryset = queryset
+        self.fields["employee"].widget.queryset = queryset
+        self._style_fields()
+
+    def clean(self):
+        data = super().clean()
+        allocated_at = data.get("allocated_at")
+        returned_at = data.get("returned_at")
+        if data.get("allocation_status") == self.STATUS_RETURNED:
+            if not returned_at:
+                self.add_error("returned_at", "Return date and time is required for a returned Book.")
+            if not data.get("return_condition"):
+                self.add_error("return_condition", "Return condition is required.")
+            if not (data.get("return_note") or "").strip():
+                self.add_error("return_note", "Return note is required.")
+            if allocated_at and returned_at and returned_at < allocated_at:
+                self.add_error("returned_at", "Return date and time cannot be before allocation.")
+        return data
+
+
+class TshirtAllocationAdminEditForm(StyledFormMixin, forms.Form):
+    employee = forms.ModelChoiceField(
+        queryset=Employee.objects.none(),
+        widget=AjaxSearchSelect("inventory:employee_autocomplete", "Search Employee ID, name or mobile"),
+    )
+    stock = forms.ModelChoiceField(
+        queryset=TshirtStock.objects.none(),
+        widget=AjaxSearchSelect("inventory:tshirt_stock_autocomplete", "Search T-shirt brand or size"),
+    )
+    quantity = forms.IntegerField(min_value=1)
+    requested_at = _past_datetime_field("Request / Entry Date & Time")
+    issued_at = _past_datetime_field("Issued Date & Time")
+
+    def __init__(self, *args, allocation=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        employee_queryset = Employee.objects.filter(is_active=True).order_by("employee_id")
+        stock_queryset = TshirtStock.objects.select_related("brand").filter(brand__is_active=True).order_by("brand__name", "size")
+        self.fields["employee"].queryset = employee_queryset
+        self.fields["employee"].widget.queryset = employee_queryset
+        self.fields["stock"].queryset = stock_queryset
+        self.fields["stock"].widget.queryset = stock_queryset
+        if allocation and allocation.status != TshirtAllocation.Status.ISSUED:
+            self.fields["issued_at"].disabled = True
+            self.fields["issued_at"].required = False
         self._style_fields()
 
 
