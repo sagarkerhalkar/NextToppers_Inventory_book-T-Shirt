@@ -1,0 +1,53 @@
+{% extends 'inventory/base.html' %}{% block title %}Branding Settings{% endblock %}
+{% block content %}
+<section class="branding-page-head">
+  <div><span class="eyebrow">APPLICATION IDENTITY</span><h1>Branding Settings</h1><p>Upload the logo once and it will appear in the navigation, login screen and the new 3D dashboard module.</p></div>
+</section>
+<div class="row g-4">
+  <div class="col-xl-7">
+    <section class="content-card premium-card branding-editor-card">
+      <form method="post" enctype="multipart/form-data" class="save-form" id="brandingForm">
+        <input type="hidden" name="branding_nonce" value="{{ branding_nonce }}">
+        {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
+        <div class="row g-3">
+          {% for field in form %}
+          <div class="col-12 {% if field.name == 'organization_name' %}col-md-12{% else %}col-md-6{% endif %}">
+            <label class="form-label">{{ field.label }}{% if field.field.required %} *{% endif %}</label>
+            {{ field }}
+            {% if field.help_text %}<div class="form-text">{{ field.help_text|safe }}</div>{% endif %}
+            {% for error in field.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+          </div>
+          {% endfor %}
+        </div>
+        <div class="mt-4 d-flex flex-wrap gap-2">
+          <button class="btn btn-primary save-button" type="submit"><span class="save-label">Save Branding</span><span class="save-working d-none"><span class="spinner-border spinner-border-sm me-2"></span>Saving...</span></button>
+          <a href="{% url 'inventory:dashboard' %}" class="btn btn-outline-secondary">Back to Dashboard</a>
+        </div>
+      </form>
+    </section>
+  </div>
+  <div class="col-xl-5">
+    <section class="content-card premium-card branding-preview-card">
+      <span class="eyebrow">LIVE PREVIEW</span><h2>3D Dashboard Identity</h2>
+      <div class="branding-orbit-stage">
+        <div class="branding-ring ring-one"></div><div class="branding-ring ring-two"></div><div class="branding-ring ring-three"></div>
+        <div class="branding-logo-shell">
+          {% if branding_record.app_logo %}<img id="brandingLogoPreview" src="{{ branding_record.app_logo.url }}" alt="Current logo">{% else %}<div id="brandingLogoFallback">NT</div>{% endif %}
+        </div>
+        <div class="branding-stage-base"></div>
+      </div>
+      <h3 id="brandingNamePreview">{{ branding_record.organization_name|default:'Next Toppers Inventory System' }}</h3>
+      <p>The uploaded logo is automatically displayed with the 3D glass and orbit effect. The original image file is not modified.</p>
+      <div class="branding-file-status">
+        <span>App logo</span><b>{% if branding_record.app_logo %}Uploaded{% else %}Not uploaded{% endif %}</b>
+      </div>
+    </section>
+  </div>
+</div>
+<style>
+.branding-page-head{padding:1rem 0 1.3rem}.branding-page-head h1{font-weight:900;margin:.25rem 0}.branding-editor-card,.branding-preview-card{min-height:100%}.branding-preview-card{text-align:center;overflow:hidden;position:relative}.branding-orbit-stage{height:330px;position:relative;display:grid;place-items:center;margin:1rem 0}.branding-logo-shell{width:155px;height:155px;border-radius:34px;padding:18px;display:grid;place-items:center;position:relative;z-index:4;background:linear-gradient(145deg,rgba(20,184,166,.86),rgba(15,23,42,.94));box-shadow:0 0 35px rgba(20,184,166,.55),inset 0 1px 1px rgba(255,255,255,.35);transform:perspective(700px) rotateX(8deg) rotateY(-9deg)}.branding-logo-shell img{width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 12px 16px rgba(0,0,0,.32))}.branding-logo-shell div{font-size:3.2rem;font-weight:950;color:#fff}.branding-ring{position:absolute;border:2px solid rgba(45,212,191,.62);border-radius:50%;z-index:2}.ring-one{width:225px;height:150px;transform:rotate(18deg);animation:brandingSpin 10s linear infinite}.ring-two{width:170px;height:235px;transform:rotate(-24deg);animation:brandingSpinReverse 13s linear infinite}.ring-three{width:245px;height:245px;border-color:rgba(56,189,248,.25);animation:brandingPulse 3s ease-in-out infinite}.branding-stage-base{position:absolute;bottom:20px;width:230px;height:44px;border-radius:50%;background:radial-gradient(ellipse,rgba(45,212,191,.65),rgba(15,23,42,0) 70%);filter:blur(3px)}.branding-file-status{display:flex;justify-content:space-between;padding:.85rem 1rem;border-radius:14px;background:rgba(15,118,110,.08);border:1px solid rgba(15,118,110,.15)}@keyframes brandingSpin{to{transform:rotate(378deg)}}@keyframes brandingSpinReverse{to{transform:rotate(-384deg)}}@keyframes brandingPulse{50%{transform:scale(1.08);opacity:.55}}@media(max-width:767px){.branding-orbit-stage{height:270px}.branding-logo-shell{width:130px;height:130px}}
+</style>
+{% endblock %}
+{% block extra_scripts %}
+<script>(function(){const logoInput=document.getElementById('id_app_logo');const nameInput=document.getElementById('id_organization_name');const namePreview=document.getElementById('brandingNamePreview');if(nameInput&&namePreview){nameInput.addEventListener('input',()=>namePreview.textContent=nameInput.value||'Next Toppers Inventory System')}if(logoInput){logoInput.addEventListener('change',()=>{const file=logoInput.files&&logoInput.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{let img=document.getElementById('brandingLogoPreview');const fallback=document.getElementById('brandingLogoFallback');if(!img){img=document.createElement('img');img.id='brandingLogoPreview';img.alt='New logo preview';fallback?.replaceWith(img)}img.src=e.target.result};reader.readAsDataURL(file)})}})();</script>
+{% endblock %}

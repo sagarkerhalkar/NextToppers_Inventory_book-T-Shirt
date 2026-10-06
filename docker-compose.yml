@@ -1,0 +1,13 @@
+services:
+  inventory:
+    build: .
+    ports:
+      - "3458:3458"
+    env_file: .env
+    environment:
+      DATABASE_PATH: data/db.sqlite3
+      BACKUP_DIRECTORY: data/backups
+    volumes:
+      - ./data:/app/data
+      - ./media:/app/media
+    restart: unless-stopped

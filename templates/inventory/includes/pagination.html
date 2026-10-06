@@ -1,0 +1,35 @@
+{% if page_obj %}
+<div class="pagination-shell mt-3">
+  <div class="pagination-summary">
+    Showing <strong>{{ page_obj.start_index }}</strong>–<strong>{{ page_obj.end_index }}</strong>
+    of <strong>{{ page_obj.paginator.count }}</strong> records
+  </div>
+  <div class="pagination-actions">
+    <label class="page-size-label">Rows
+      <select class="form-select form-select-sm page-size-select" data-page-size data-page-parameter="{{ page_parameter }}" data-size-parameter="{{ size_parameter }}">
+        <option value="20" {% if page_size == 20 %}selected{% endif %}>20</option>
+        <option value="30" {% if page_size == 30 %}selected{% endif %}>30</option>
+      </select>
+    </label>
+    <nav aria-label="Pagination">
+      <ul class="pagination pagination-sm mb-0">
+        {% if page_obj.has_previous %}
+          <li class="page-item"><a class="page-link" href="?{% if page_query %}{{ page_query }}&{% endif %}{{ page_parameter }}=1">First</a></li>
+          <li class="page-item"><a class="page-link" href="?{% if page_query %}{{ page_query }}&{% endif %}{{ page_parameter }}={{ page_obj.previous_page_number }}">Previous</a></li>
+        {% else %}
+          <li class="page-item disabled"><span class="page-link">First</span></li>
+          <li class="page-item disabled"><span class="page-link">Previous</span></li>
+        {% endif %}
+        <li class="page-item active"><span class="page-link">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span></li>
+        {% if page_obj.has_next %}
+          <li class="page-item"><a class="page-link" href="?{% if page_query %}{{ page_query }}&{% endif %}{{ page_parameter }}={{ page_obj.next_page_number }}">Next</a></li>
+          <li class="page-item"><a class="page-link" href="?{% if page_query %}{{ page_query }}&{% endif %}{{ page_parameter }}={{ page_obj.paginator.num_pages }}">Last</a></li>
+        {% else %}
+          <li class="page-item disabled"><span class="page-link">Next</span></li>
+          <li class="page-item disabled"><span class="page-link">Last</span></li>
+        {% endif %}
+      </ul>
+    </nav>
+  </div>
+</div>
+{% endif %}

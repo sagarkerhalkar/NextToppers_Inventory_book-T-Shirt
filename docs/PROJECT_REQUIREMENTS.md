@@ -1,6 +1,6 @@
 # Next Toppers Book and T-Shirt Inventory Management — Locked Requirements
 
-_Last updated: 22 July 2026_
+_Last updated: 23 July 2026_
 
 These requirements are the approved baseline. New features may be added later, but the requirements below must not be removed, ignored or weakened without the owner's explicit approval.
 
@@ -43,8 +43,8 @@ Permissions must be enforced in both the user interface and backend APIs.
 
 - Has all operational inventory permissions.
 - Can delete eligible Book and T-shirt records after confirmation.
-- Can create, edit, activate, deactivate and reset passwords for Staff accounts.
-- Can create, edit, activate, deactivate and reset passwords for other Admin accounts.
+- Can create, edit, activate, deactivate, delete eligible records and reset passwords for Staff accounts.
+- Can create, edit, activate, deactivate, delete eligible records and reset passwords for other Admin accounts.
 - Can promote Staff to Admin and demote Admin to Staff when authorized.
 - Can change organization branding.
 - Cannot create, edit, deactivate, reset, demote or delete Super Admin accounts.
@@ -53,28 +53,34 @@ Permissions must be enforced in both the user interface and backend APIs.
 ### Super Admin
 
 - Has full application access.
-- Can manage Super Admin, Admin and Staff accounts.
+- Can manage and delete eligible Super Admin, Admin and Staff accounts.
 - Can manage roles, permissions, system settings and branding.
 - Can access all reports, backups and audit logs.
 
 ### Account Security
 
-- User accounts must be deactivated rather than permanently deleted so their history remains available.
+- Eligible Login Users may be permanently deleted by an authorized Admin or Super Admin.
+- A Login User linked through protected historical inventory cannot be deleted and must be deactivated instead.
+- The currently signed-in account cannot delete itself.
+- The last active Super Admin cannot be deleted.
 - Passwords must never be visible to administrators or stored in audit logs.
 - Password resets must use a temporary password or secure reset process and require a new password at the next sign-in.
 - All important account, role, password, inventory, branding and configuration actions must be audited.
 
 ## Employee and User Master
 
-- Employee ID is mandatory, unique, entered manually and cannot be changed after creation.
+- Employee ID is mandatory, unique and entered manually.
 - Employee ID format is `NXTTP` followed by exactly four digits, for example `NXTTP0043`.
+- Admin and Super Admin can correct an Employee ID or Login User ID entered by mistake; linked history must remain connected and the correction must be audited.
 - Full name is mandatory.
-- Mobile number is mandatory and unique.
-- Mobile format is `+91` followed by exactly 10 digits.
+- Mobile number is optional for non-login Employee Master records.
+- When supplied, Employee mobile number must be unique and use `+91` followed by exactly 10 digits.
+- Login User mobile number remains mandatory and unique.
 - Official email, department, designation, joining date, office/location and profile picture are optional.
 - The employee profile must store a default T-shirt size.
 - Login uses Employee ID plus password.
 - There is no employee self-service forgot-password process; an Admin or Super Admin performs the reset.
+- Admin and Super Admin can delete Employee records without protected Book/T-shirt history; records with history must be marked inactive.
 - Detailed employee rules are maintained in `docs/EMPLOYEE_USER_MASTER.md`.
 
 ## 1. Application Scope
@@ -94,6 +100,8 @@ Each Book record must support:
 
 - Book Asset ID/barcode
 - Book name
+- Publication name
+- Subject
 - Class name
 - Stream name
 - ISBN number
@@ -108,6 +116,8 @@ Each Book record must support:
 - Return condition
 - Return note
 - Complete allocation and return history
+
+Admin and Super Admin can correct a Book Number/Asset ID entered by mistake. The corrected value must remain unique and all allocation/return history must remain linked to the same Book record.
 
 ### Book Photo Automation
 
@@ -248,7 +258,9 @@ Each request must store:
 - Bulk employee import through Excel is required.
 - Bulk Book inventory import through Excel is required.
 - Bulk T-shirt stock import through Excel is required.
-- Imports must validate records, identify errors and prevent duplicate Employee IDs, mobile numbers, Book Asset IDs and other unique values.
+- Imports must validate records, identify errors and prevent duplicate Employee IDs, supplied mobile numbers, Book Asset IDs and other unique values.
+- Employee Excel import must allow a blank mobile number.
+- Book Excel import must support publication name and subject.
 
 ### Notifications
 

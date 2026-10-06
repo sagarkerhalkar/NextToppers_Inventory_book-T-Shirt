@@ -1,0 +1,48 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0f766e">
+  <title>{% block title %}Inventory{% endblock %} | Next Toppers</title>
+  <link rel="icon" href="{% static 'inventory/favicon.svg' %}" type="image/svg+xml">
+  <link href="{% static 'vendor/bootstrap/bootstrap.min.css' %}" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'inventory/app.css' %}">
+  <link rel="stylesheet" href="{% static 'inventory/theme-teal.css' %}">
+  <link rel="stylesheet" href="{% static 'inventory/typography.css' %}">
+  <link rel="stylesheet" href="{% static 'inventory/pagination.css' %}">
+  <link rel="stylesheet" href="{% static 'inventory/ajax-select.css' %}">
+</head>
+<body>
+<div class="ambient ambient-one"></div><div class="ambient ambient-two"></div><div class="ambient ambient-three"></div>
+<nav class="navbar navbar-expand-xl navbar-dark app-navbar sticky-top">
+  <div class="container-fluid px-lg-4">
+    <a class="navbar-brand d-flex align-items-center gap-2" href="{% url 'inventory:dashboard' %}">
+      {% if branding and branding.app_logo %}<img src="{{ branding.app_logo.url }}" class="nav-logo" alt="{{ branding.organization_name|default:'Next Toppers' }} Logo">{% else %}<span class="brand-cube">NT</span>{% endif %}
+      <span><b>{{ branding.organization_name|default:'Next Toppers Inventory System' }}</b><small>Global Inventory</small></span>
+    </a>
+    <button class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#menu"><span class="navbar-toggler-icon"></span></button>
+    <div class="collapse navbar-collapse" id="menu">
+      <ul class="navbar-nav me-auto align-items-xl-center">
+        <li class="nav-item"><a class="nav-link" href="{% url 'inventory:dashboard' %}">Dashboard</a></li>
+        <li class="nav-item dropdown"><a class="nav-link dropdown-toggle" data-bs-toggle="dropdown" href="#">Books</a><ul class="dropdown-menu"><li><a class="dropdown-item" href="{% url 'inventory:book_list' %}">Book Inventory</a></li><li><a class="dropdown-item" href="{% url 'inventory:book_history' %}">Allocation & Return Log</a></li></ul></li>
+        <li class="nav-item dropdown"><a class="nav-link dropdown-toggle" data-bs-toggle="dropdown" href="#">T-shirts</a><ul class="dropdown-menu"><li><a class="dropdown-item" href="{% url 'inventory:tshirt_stock_list' %}">Live Stock</a></li><li><a class="dropdown-item" href="{% url 'inventory:tshirt_allocation_list' %}">Employee Issue History</a></li>{% if user.role == 'ADMIN' or user.role == 'SUPER_ADMIN' %}<li><a class="dropdown-item" href="{% url 'inventory:tshirt_brand_list' %}">Brand & Free Limits</a></li>{% endif %}</ul></li>
+        <li class="nav-item"><a class="nav-link" href="{% url 'inventory:employee_list' %}">Employees</a></li>
+        <li class="nav-item"><a class="nav-link" href="{% url 'inventory:reports' %}">Reports</a></li>
+        {% if user.role == 'ADMIN' or user.role == 'SUPER_ADMIN' %}<li class="nav-item dropdown"><a class="nav-link dropdown-toggle" data-bs-toggle="dropdown" href="#">Administration</a><ul class="dropdown-menu"><li><a class="dropdown-item" href="{% url 'inventory:login_user_list' %}">Login Users</a></li><li><a class="dropdown-item" href="{% url 'inventory:bulk_import' %}">Excel Imports</a></li><li><a class="dropdown-item" href="{% url 'inventory:branding' %}">Branding</a></li>{% if user.role == 'SUPER_ADMIN' %}<li><a class="dropdown-item" href="{% url 'inventory:download_database_backup' %}">Database Backup</a></li>{% endif %}</ul></li>{% endif %}
+      </ul>
+      <div class="user-chip"><span class="user-avatar">{{ user.full_name|slice:':1'|upper }}</span><span><b>{{ user.employee_id }}</b><small>{{ user.get_role_display }}</small></span></div>
+      <a class="btn btn-outline-light btn-sm ms-xl-2" href="{% url 'logout' %}">Logout</a>
+    </div>
+  </div>
+</nav>
+<main class="container-fluid page-wrap page-enter">
+  {% for message in messages %}<div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show floating-alert"><span>{{ message }}</span><button class="btn-close" data-bs-dismiss="alert"></button></div>{% endfor %}
+  {% block content %}{% endblock %}
+</main>
+<div id="saveOverlay" class="save-overlay" aria-hidden="true"><div class="save-overlay-card"><div class="smooth-spinner"></div><strong>Saving securely...</strong><span>Please wait. Do not click again.</span></div></div>
+<script src="{% static 'vendor/bootstrap/bootstrap.bundle.min.js' %}"></script>
+<script src="{% static 'inventory/ajax-select.js' %}"></script>
+<script>(function(){const overlay=document.getElementById('saveOverlay');document.querySelectorAll('form[method="post"]').forEach(form=>{form.addEventListener('submit',()=>{if(!form.checkValidity())return;const button=form.querySelector('button[type="submit"]');if(button){button.disabled=true;const label=button.querySelector('.save-label');const working=button.querySelector('.save-working');if(label)label.classList.add('d-none');if(working)working.classList.remove('d-none');}if(overlay){overlay.classList.add('visible');overlay.setAttribute('aria-hidden','false');}});});document.querySelectorAll('[data-page-size]').forEach(select=>{select.addEventListener('change',()=>{const url=new URL(window.location.href);const sizeParameter=select.dataset.sizeParameter||'page_size';const pageParameter=select.dataset.pageParameter||'page';url.searchParams.set(sizeParameter,select.value);url.searchParams.delete(pageParameter);window.location.assign(url.toString());});});window.addEventListener('pageshow',()=>{if(overlay){overlay.classList.remove('visible');overlay.setAttribute('aria-hidden','true');}document.querySelectorAll('button[type="submit"]').forEach(button=>button.disabled=false);});})();</script>
+{% block extra_scripts %}{% endblock %}
+</body></html>
