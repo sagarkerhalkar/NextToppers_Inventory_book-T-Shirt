@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from django.conf import settings
+from django.middleware.csrf import CsrfViewMiddleware
 
 
 class InternalNullOriginCompatibilityMiddleware:
@@ -46,3 +47,20 @@ class InternalNullOriginCompatibilityMiddleware:
                 request.META["NEXT_TOPPERS_ORIGINAL_ORIGIN"] = "null"
 
         return self.get_response(request)
+
+
+class ManagedBrowserCsrfViewMiddleware(CsrfViewMiddleware):
+    """Normalize literal Origin:null for approved app hosts before CSRF validation."""
+
+    def process_view(self, request, callback, callback_args, callback_kwargs):
+        if request.method not in InternalNullOriginCompatibilityMiddleware.SAFE_METHODS:
+            if request.META.get("HTTP_ORIGIN") == "null":
+                host = request.get_host().lower()
+                if InternalNullOriginCompatibilityMiddleware._approved_host(host):
+                    hostname = host.rsplit(":", 1)[0] if host.count(":") == 1 else host
+                    public_domain = str(getattr(settings, "PUBLIC_INVENTORY_DOMAIN", "")).strip().lower().rstrip(".")
+                    scheme = "https" if hostname == public_domain else ("https" if request.is_secure() else "http")
+                    request.META["HTTP_ORIGIN"] = f"{scheme}://{host}"
+                    request.META["NEXT_TOPPERS_ORIGINAL_ORIGIN"] = "null"
+
+        return super().process_view(request, callback, callback_args, callback_kwargs)
