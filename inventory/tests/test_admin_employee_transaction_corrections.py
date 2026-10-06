@@ -1,0 +1,163 @@
+from django.test import TestCase
+from django.urls import reverse
+from django.utils import timezone
+
+from inventory.models import Book, BookAllocation, Employee, TshirtAllocation, TshirtBrand, TshirtStock, User
+from inventory.services import (
+    admin_delete_book_allocation,
+    admin_delete_tshirt_allocation,
+    admin_edit_book_allocation,
+    admin_edit_tshirt_allocation,
+)
+
+
+class AdminEmployeeTransactionCorrectionTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.admin = User.objects.create_user(
+            employee_id="NXTTP9601",
+            full_name="Transaction Admin",
+            mobile_number="+919876509601",
+            password="Test1234",
+            role=User.Role.ADMIN,
+            is_active=True,
+            must_change_password=False,
+        )
+        cls.staff = User.objects.create_user(
+            employee_id="NXTTP9602",
+            full_name="Transaction Staff",
+            mobile_number="+919876509602",
+            password="Test1234",
+            role=User.Role.STAFF,
+            is_active=True,
+            must_change_password=False,
+        )
+        cls.employee_a = Employee.objects.create(
+            employee_id="NXTTP9603",
+            full_name="Employee A",
+            mobile_number="+919876509603",
+            is_active=True,
+        )
+        cls.employee_b = Employee.objects.create(
+            employee_id="NXTTP9604",
+            full_name="Employee B",
+            mobile_number="+919876509604",
+            is_active=True,
+        )
+        cls.brand = TshirtBrand.objects.create(
+            name="Transaction Brand",
+            free_quantity_rolling_12_months=10,
+            is_active=True,
+        )
+
+    def setUp(self):
+        self.book = Book.objects.create(
+            asset_id="TRXBOOK1",
+            name="Transaction Book",
+            condition=Book.Condition.GOOD,
+            status=Book.Status.ALLOCATED,
+            created_by=self.admin,
+        )
+        self.book_allocation = BookAllocation.objects.create(
+            book=self.book,
+            employee_record=self.employee_a,
+            allocated_by=self.admin,
+            allocated_at=timezone.now(),
+            is_active=True,
+        )
+        self.stock_a = TshirtStock.objects.create(
+            brand=self.brand,
+            size=User.TshirtSize.L,
+            available_quantity=8,
+            allocated_quantity=2,
+        )
+        self.stock_b = TshirtStock.objects.create(
+            brand=self.brand,
+            size=User.TshirtSize.XL,
+            available_quantity=20,
+            allocated_quantity=0,
+        )
+        self.tshirt_allocation = TshirtAllocation.objects.create(
+            employee_record=self.employee_a,
+            stock=self.stock_a,
+            quantity=2,
+            issue_type=TshirtAllocation.IssueType.FREE,
+            status=TshirtAllocation.Status.ISSUED,
+            requested_by=self.admin,
+            requested_at=timezone.now(),
+            issued_by=self.admin,
+            issued_at=timezone.now(),
+        )
+
+    def test_admin_can_edit_active_book_employee_transaction(self):
+        updated = admin_edit_book_allocation(
+            allocation=self.book_allocation,
+            employee=self.employee_b,
+            allocated_at=timezone.now(),
+            allocation_status="ACTIVE",
+            returned_at=None,
+            return_condition="",
+            return_note="",
+            actor=self.admin,
+        )
+        updated.refresh_from_db()
+        self.book.refresh_from_db()
+        self.assertEqual(updated.employee_record, self.employee_b)
+        self.assertTrue(updated.is_active)
+        self.assertEqual(self.book.status, Book.Status.ALLOCATED)
+
+    def test_deleting_active_book_transaction_returns_book_to_inventory(self):
+        admin_delete_book_allocation(allocation=self.book_allocation, actor=self.admin)
+        self.book.refresh_from_db()
+        self.assertFalse(BookAllocation.objects.filter(pk=self.book_allocation.pk).exists())
+        self.assertEqual(self.book.status, Book.Status.IN_LIBRARY)
+
+    def test_editing_issued_tshirt_transaction_moves_stock_and_employee(self):
+        updated = admin_edit_tshirt_allocation(
+            allocation=self.tshirt_allocation,
+            employee=self.employee_b,
+            stock=self.stock_b,
+            quantity=3,
+            requested_at=timezone.now(),
+            issued_at=timezone.now(),
+            actor=self.admin,
+        )
+        updated.refresh_from_db()
+        self.stock_a.refresh_from_db()
+        self.stock_b.refresh_from_db()
+        self.assertEqual(updated.employee_record, self.employee_b)
+        self.assertEqual(updated.stock, self.stock_b)
+        self.assertEqual(updated.quantity, 3)
+        self.assertEqual(self.stock_a.available_quantity, 10)
+        self.assertEqual(self.stock_a.allocated_quantity, 0)
+        self.assertEqual(self.stock_b.available_quantity, 17)
+        self.assertEqual(self.stock_b.allocated_quantity, 3)
+
+    def test_deleting_issued_tshirt_transaction_restores_stock(self):
+        admin_delete_tshirt_allocation(allocation=self.tshirt_allocation, actor=self.admin)
+        self.stock_a.refresh_from_db()
+        self.assertFalse(TshirtAllocation.objects.filter(pk=self.tshirt_allocation.pk).exists())
+        self.assertEqual(self.stock_a.available_quantity, 10)
+        self.assertEqual(self.stock_a.allocated_quantity, 0)
+
+    def test_staff_cannot_open_book_transaction_edit(self):
+        self.client.force_login(self.staff)
+        response = self.client.get(reverse("inventory:book_allocation_edit", args=[self.book_allocation.pk]))
+        self.assertRedirects(response, reverse("inventory:dashboard"))
+
+    def test_staff_cannot_open_tshirt_transaction_edit(self):
+        self.client.force_login(self.staff)
+        response = self.client.get(reverse("inventory:tshirt_allocation_edit", args=[self.tshirt_allocation.pk]))
+        self.assertRedirects(response, reverse("inventory:dashboard"))
+
+    def test_admin_delete_book_route(self):
+        self.client.force_login(self.admin)
+        response = self.client.post(reverse("inventory:book_allocation_delete", args=[self.book_allocation.pk]))
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(BookAllocation.objects.filter(pk=self.book_allocation.pk).exists())
+
+    def test_admin_delete_tshirt_route(self):
+        self.client.force_login(self.admin)
+        response = self.client.post(reverse("inventory:tshirt_allocation_delete", args=[self.tshirt_allocation.pk]))
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(TshirtAllocation.objects.filter(pk=self.tshirt_allocation.pk).exists())
