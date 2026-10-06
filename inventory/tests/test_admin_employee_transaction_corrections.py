@@ -1,4 +1,4 @@
-from django.test import TestCase
+from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
@@ -177,4 +177,54 @@ class AdminEmployeeTransactionCorrectionTests(TestCase):
         self.assertContains(response, "Delete T-shirt Employee Entry")
         self.assertContains(response, "Yes, Delete T-shirt Entry")
         self.assertTrue(TshirtAllocation.objects.filter(pk=self.tshirt_allocation.pk).exists())
+
+    def _csrf_client(self):
+        return Client(enforce_csrf_checks=True, HTTP_HOST="nexttpinventory.sagarkerhalkar.com")
+
+    def _login_csrf_client(self):
+        client = self._csrf_client()
+        client.force_login(self.admin)
+        return client
+
+    def test_online_https_null_origin_can_delete_book_transaction(self):
+        client = self._login_csrf_client()
+        url = reverse("inventory:book_allocation_delete", args=[self.book_allocation.pk])
+        get_response = client.get(url, secure=True, HTTP_X_FORWARDED_PROTO="https")
+        self.assertEqual(get_response.status_code, 200)
+        token = get_response.cookies.get("csrftoken")
+        if token is not None:
+            csrf_token = token.value
+        else:
+            csrf_token = client.session.get("_csrftoken")
+        self.assertTrue(csrf_token)
+        response = client.post(
+            url,
+            {"csrfmiddlewaretoken": csrf_token},
+            secure=True,
+            HTTP_ORIGIN="null",
+            HTTP_X_FORWARDED_PROTO="https",
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(BookAllocation.objects.filter(pk=self.book_allocation.pk).exists())
+
+    def test_online_https_null_origin_can_delete_tshirt_transaction(self):
+        client = self._login_csrf_client()
+        url = reverse("inventory:tshirt_allocation_delete", args=[self.tshirt_allocation.pk])
+        get_response = client.get(url, secure=True, HTTP_X_FORWARDED_PROTO="https")
+        self.assertEqual(get_response.status_code, 200)
+        token = get_response.cookies.get("csrftoken")
+        if token is not None:
+            csrf_token = token.value
+        else:
+            csrf_token = client.session.get("_csrftoken")
+        self.assertTrue(csrf_token)
+        response = client.post(
+            url,
+            {"csrfmiddlewaretoken": csrf_token},
+            secure=True,
+            HTTP_ORIGIN="null",
+            HTTP_X_FORWARDED_PROTO="https",
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(TshirtAllocation.objects.filter(pk=self.tshirt_allocation.pk).exists())
 
