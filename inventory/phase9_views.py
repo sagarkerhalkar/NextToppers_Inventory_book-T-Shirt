@@ -259,9 +259,22 @@ def book_allocation_delete(request, pk):
     if request.method == "POST":
         admin_delete_book_allocation(allocation=allocation, actor=request.user)
         messages.success(request, "Book employee transaction deleted and Book availability recalculated.")
-    if employee_pk:
-        return redirect("inventory:employee_history", pk=employee_pk)
-    return redirect("inventory:book_history")
+        if employee_pk:
+            return redirect("inventory:employee_history", pk=employee_pk)
+        return redirect("inventory:book_history")
+
+    return render(request, "inventory/confirm_transaction_delete.html", {
+        "transaction_type": "Book",
+        "title": "Delete Book Employee Entry",
+        "employee": allocation.recipient,
+        "item_name": f"{allocation.book.asset_id} - {allocation.book.name}",
+        "quantity": None,
+        "status": "Currently Allocated" if allocation.is_active else "Returned",
+        "transaction_date": allocation.allocated_at,
+        "warning": "This deletes only this employee Book transaction. The Book itself is not deleted. Book availability/status will be recalculated automatically.",
+        "cancel_url_name": "inventory:employee_history" if employee_pk else "inventory:book_history",
+        "cancel_pk": employee_pk,
+    })
 
 
 @role_required(User.Role.ADMIN, User.Role.SUPER_ADMIN)
@@ -310,9 +323,22 @@ def tshirt_allocation_delete(request, pk):
     if request.method == "POST":
         admin_delete_tshirt_allocation(allocation=allocation, actor=request.user)
         messages.success(request, "T-shirt employee transaction deleted and stock restored automatically.")
-    if employee_pk:
-        return redirect("inventory:employee_history", pk=employee_pk)
-    return redirect("inventory:tshirt_allocation_list")
+        if employee_pk:
+            return redirect("inventory:employee_history", pk=employee_pk)
+        return redirect("inventory:tshirt_allocation_list")
+
+    return render(request, "inventory/confirm_transaction_delete.html", {
+        "transaction_type": "T-shirt",
+        "title": "Delete T-shirt Employee Entry",
+        "employee": allocation.recipient,
+        "item_name": f"{allocation.stock.brand.name} / Size {allocation.stock.size}",
+        "quantity": allocation.quantity,
+        "status": allocation.get_status_display(),
+        "transaction_date": allocation.issued_at or allocation.requested_at,
+        "warning": "This deletes only this employee T-shirt transaction. If it was already issued, the issued quantity will be restored to available stock automatically.",
+        "cancel_url_name": "inventory:employee_history" if employee_pk else "inventory:tshirt_allocation_list",
+        "cancel_pk": employee_pk,
+    })
 
 
 
