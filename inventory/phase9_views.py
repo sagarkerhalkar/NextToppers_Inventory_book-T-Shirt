@@ -207,7 +207,7 @@ def paid_tshirt_request(request):
     })
 
 
-@role_required(User.Role.ADMIN, User.Role.SUPER_ADMIN)
+@login_required
 def book_allocation_edit(request, pk):
     allocation = get_object_or_404(
         BookAllocation.objects.select_related("book", "employee", "employee_record"),
@@ -249,7 +249,7 @@ def book_allocation_edit(request, pk):
     })
 
 
-@role_required(User.Role.ADMIN, User.Role.SUPER_ADMIN)
+@role_required(User.Role.SUPER_ADMIN)
 def book_allocation_delete(request, pk):
     allocation = get_object_or_404(
         BookAllocation.objects.select_related("book", "employee", "employee_record"),
@@ -277,7 +277,7 @@ def book_allocation_delete(request, pk):
     })
 
 
-@role_required(User.Role.ADMIN, User.Role.SUPER_ADMIN)
+@login_required
 def tshirt_allocation_edit(request, pk):
     allocation = get_object_or_404(
         TshirtAllocation.objects.select_related("stock", "stock__brand", "employee", "employee_record"),
@@ -313,7 +313,7 @@ def tshirt_allocation_edit(request, pk):
     })
 
 
-@role_required(User.Role.ADMIN, User.Role.SUPER_ADMIN)
+@role_required(User.Role.SUPER_ADMIN)
 def tshirt_allocation_delete(request, pk):
     allocation = get_object_or_404(
         TshirtAllocation.objects.select_related("stock", "stock__brand", "employee", "employee_record"),
@@ -343,7 +343,7 @@ def tshirt_allocation_delete(request, pk):
 
 
 
-@role_required(User.Role.ADMIN, User.Role.SUPER_ADMIN)
+@role_required(User.Role.SUPER_ADMIN)
 @transaction.atomic
 def employee_book_transactions_bulk_delete(request, pk):
     employee = get_object_or_404(Employee, pk=pk)
@@ -377,7 +377,7 @@ def employee_book_transactions_bulk_delete(request, pk):
     return redirect("inventory:employee_history", pk=employee.pk)
 
 
-@role_required(User.Role.ADMIN, User.Role.SUPER_ADMIN)
+@role_required(User.Role.SUPER_ADMIN)
 @transaction.atomic
 def employee_tshirt_transactions_bulk_delete(request, pk):
     employee = get_object_or_404(Employee, pk=pk)
