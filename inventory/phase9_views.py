@@ -344,6 +344,76 @@ def tshirt_allocation_delete(request, pk):
 
 
 @role_required(User.Role.ADMIN, User.Role.SUPER_ADMIN)
+@transaction.atomic
+def employee_book_transactions_bulk_delete(request, pk):
+    employee = get_object_or_404(Employee, pk=pk)
+    if request.method != "POST":
+        return redirect("inventory:employee_history", pk=employee.pk)
+
+    selected_ids = request.POST.getlist("book_transaction_ids")
+    if not selected_ids:
+        messages.error(request, "Select at least one Book entry to delete.")
+        return redirect("inventory:employee_history", pk=employee.pk)
+
+    allocations = list(
+        BookAllocation.objects.select_for_update()
+        .select_related("book", "employee", "employee_record")
+        .filter(pk__in=selected_ids, employee_record=employee)
+        .order_by("pk")
+    )
+    if not allocations:
+        messages.error(request, "No matching Book entries were found.")
+        return redirect("inventory:employee_history", pk=employee.pk)
+
+    deleted = 0
+    for allocation in allocations:
+        admin_delete_book_allocation(allocation=allocation, actor=request.user)
+        deleted += 1
+
+    messages.success(
+        request,
+        f"{deleted} Book entr{'y' if deleted == 1 else 'ies'} deleted. The employee was not deleted.",
+    )
+    return redirect("inventory:employee_history", pk=employee.pk)
+
+
+@role_required(User.Role.ADMIN, User.Role.SUPER_ADMIN)
+@transaction.atomic
+def employee_tshirt_transactions_bulk_delete(request, pk):
+    employee = get_object_or_404(Employee, pk=pk)
+    if request.method != "POST":
+        return redirect("inventory:employee_history", pk=employee.pk)
+
+    selected_ids = request.POST.getlist("tshirt_transaction_ids")
+    if not selected_ids:
+        messages.error(request, "Select at least one T-shirt entry to delete.")
+        return redirect("inventory:employee_history", pk=employee.pk)
+
+    allocations = list(
+        TshirtAllocation.objects.select_for_update()
+        .select_related("stock", "stock__brand", "employee", "employee_record")
+        .filter(pk__in=selected_ids, employee_record=employee)
+        .order_by("pk")
+    )
+    if not allocations:
+        messages.error(request, "No matching T-shirt entries were found.")
+        return redirect("inventory:employee_history", pk=employee.pk)
+
+    deleted = 0
+    for allocation in allocations:
+        admin_delete_tshirt_allocation(allocation=allocation, actor=request.user)
+        deleted += 1
+
+    messages.success(
+        request,
+        f"{deleted} T-shirt entr{'y' if deleted == 1 else 'ies'} deleted. Issued stock was restored automatically. The employee was not deleted.",
+    )
+    return redirect("inventory:employee_history", pk=employee.pk)
+
+
+
+
+@role_required(User.Role.ADMIN, User.Role.SUPER_ADMIN)
 def tshirt_stock_correct(request, pk):
     stock = get_object_or_404(TshirtStock.objects.select_related("brand"), pk=pk)
     form = TshirtStockCorrectionForm(request.POST or None, stock=stock)
