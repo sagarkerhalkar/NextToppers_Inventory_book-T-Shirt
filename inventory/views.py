@@ -10,7 +10,7 @@ from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import PasswordChangeForm
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
 from django.db.models import Prefetch
 from django.http import FileResponse, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -26,7 +26,7 @@ from .forms import (
     EmployeeRecordForm, FreeTshirtIssueForm, LoginUserCreateForm, LoginUserUpdateForm,
     PaidTshirtRequestForm, RejectionForm, TshirtPurchaseForm,
 )
-from .models import AuditLog, Book, BookAllocation, BrandingSettings, Employee, TshirtAllocation, TshirtStock, User
+from .models import AuditLog, Book, BookAllocation, BrandingSettings, Employee, TshirtAllocation, TshirtPurchase, TshirtStock, User
 from .permissions import can_manage_target, role_required
 from .services import (
     add_tshirt_purchase, allocate_book, approve_paid_tshirt_request, audit,
@@ -113,7 +113,7 @@ def book_create(request):
     return render(request, "inventory/generic_form.html", {"form": form, "title": "Add Book"})
 
 
-@login_required
+@role_required(User.Role.ADMIN, User.Role.SUPER_ADMIN)
 def book_edit(request, pk):
     book = get_object_or_404(Book, pk=pk, is_active=True)
     form = BookForm(request.POST or None, request.FILES or None, instance=book)
@@ -183,13 +183,17 @@ def book_asset_label(request, pk):
 def book_delete(request, pk):
     book = get_object_or_404(Book, pk=pk)
     if request.method == "POST":
-        try:
-            asset = book.asset_id
+        asset = book.asset_id
+        # Preserve transaction history instead of destroying referenced records.
+        if book.allocations.exists() or book.condition in {Book.Condition.DAMAGED, Book.Condition.LOST}:
+            book.is_active = False
+            book.save(update_fields=["is_active", "updated_at"])
+            audit(request.user, "BOOK_ARCHIVED", book, f"Removed {asset} from active inventory; history preserved")
+            messages.success(request, "Book removed from active inventory. Allocation/history records were preserved.")
+        else:
             audit(request.user, "BOOK_DELETE_REQUESTED", book, f"Delete requested for {asset}")
             book.delete()
             messages.success(request, "Book deleted.")
-        except ValidationError as exc:
-            messages.error(request, "; ".join(exc.messages))
     return redirect("inventory:book_list")
 
 
@@ -291,6 +295,88 @@ def tshirt_purchase_create(request):
         messages.success(request, "T-shirt purchase and stock update saved.")
         return redirect("inventory:tshirt_stock_list")
     return render(request, "inventory/generic_form.html", {"form": form, "title": "Add T-shirt Purchase"})
+
+
+@role_required(User.Role.ADMIN, User.Role.SUPER_ADMIN)
+def tshirt_purchase_list(request):
+    purchases = TshirtPurchase.objects.select_related("stock", "stock__brand", "created_by").order_by("-purchase_date", "-pk")
+    query = request.GET.get("q", "").strip()
+    if query:
+        purchases = purchases.filter(
+            models.Q(stock__brand__name__icontains=query)
+            | models.Q(stock__size__icontains=query)
+            | models.Q(vendor__icontains=query)
+            | models.Q(bill_number__icontains=query)
+        )
+    return render(request, "inventory/tshirts/purchase_list.html", {"purchases": purchases, "query": query})
+
+
+@role_required(User.Role.ADMIN, User.Role.SUPER_ADMIN)
+@transaction.atomic
+def tshirt_purchase_edit(request, pk):
+    purchase = get_object_or_404(TshirtPurchase.objects.select_related("stock", "stock__brand"), pk=pk)
+    form = TshirtPurchaseForm(request.POST or None, request.FILES or None, instance=purchase)
+    if request.method == "POST" and form.is_valid():
+        old_stock = TshirtStock.objects.select_for_update().get(pk=purchase.stock_id)
+        old_quantity = purchase.quantity
+        new_stock_id = form.cleaned_data["stock"].pk
+        new_quantity = form.cleaned_data["quantity"]
+
+        if new_stock_id == old_stock.pk:
+            delta = new_quantity - old_quantity
+            if delta < 0 and old_stock.available_quantity < abs(delta):
+                form.add_error("quantity", "Cannot reduce this purchase because some of its stock has already been issued.")
+            else:
+                old_stock.available_quantity += delta
+                old_stock.save(update_fields=["available_quantity", "updated_at"])
+        else:
+            if old_stock.available_quantity < old_quantity:
+                form.add_error("stock", "Cannot move this purchase because some of its original stock has already been issued.")
+            else:
+                new_stock = TshirtStock.objects.select_for_update().get(pk=new_stock_id)
+                old_stock.available_quantity -= old_quantity
+                new_stock.available_quantity += new_quantity
+                old_stock.save(update_fields=["available_quantity", "updated_at"])
+                new_stock.save(update_fields=["available_quantity", "updated_at"])
+
+        if not form.errors:
+            updated = form.save()
+            audit(
+                request.user,
+                "TSHIRT_PURCHASE_EDITED",
+                updated,
+                f"Edited T-shirt purchase #{updated.pk}; quantity {old_quantity} -> {updated.quantity}",
+            )
+            messages.success(request, "T-shirt purchase updated and stock recalculated.")
+            return redirect("inventory:tshirt_purchase_list")
+
+    return render(
+        request,
+        "inventory/generic_form.html",
+        {"form": form, "title": f"Edit T-shirt Purchase #{purchase.pk}"},
+    )
+
+
+@role_required(User.Role.ADMIN, User.Role.SUPER_ADMIN)
+@transaction.atomic
+def tshirt_purchase_delete(request, pk):
+    purchase = get_object_or_404(TshirtPurchase.objects.select_related("stock", "stock__brand"), pk=pk)
+    if request.method == "POST":
+        stock = TshirtStock.objects.select_for_update().get(pk=purchase.stock_id)
+        if stock.available_quantity < purchase.quantity:
+            messages.error(
+                request,
+                "This purchase cannot be deleted because some of its stock has already been issued. "
+                "Use stock correction instead so history remains accurate.",
+            )
+        else:
+            description = f"Deleted T-shirt purchase #{purchase.pk}: {purchase.quantity} x {stock}"
+            stock.available_quantity -= purchase.quantity
+            stock.save(update_fields=["available_quantity", "updated_at"])
+            audit(request.user, "TSHIRT_PURCHASE_DELETED", purchase, description)
+            purchase.delete()
+            messages.success(request, "T-shirt purchase deleted and available stock adjusted.")
+    return redirect("inventory:tshirt_purchase_list")
 
 
 @login_required
