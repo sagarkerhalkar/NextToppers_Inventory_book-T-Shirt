@@ -315,10 +315,12 @@ def tshirt_purchase_list(request):
 @transaction.atomic
 def tshirt_purchase_edit(request, pk):
     purchase = get_object_or_404(TshirtPurchase.objects.select_related("stock", "stock__brand"), pk=pk)
+    original_stock_id = purchase.stock_id
+    original_quantity = purchase.quantity
     form = TshirtPurchaseForm(request.POST or None, request.FILES or None, instance=purchase)
     if request.method == "POST" and form.is_valid():
-        old_stock = TshirtStock.objects.select_for_update().get(pk=purchase.stock_id)
-        old_quantity = purchase.quantity
+        old_stock = TshirtStock.objects.select_for_update().get(pk=original_stock_id)
+        old_quantity = original_quantity
         new_stock_id = form.cleaned_data["stock"].pk
         new_quantity = form.cleaned_data["quantity"]
 
