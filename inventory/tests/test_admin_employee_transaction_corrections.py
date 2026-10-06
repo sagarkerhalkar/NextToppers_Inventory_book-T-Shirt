@@ -228,3 +228,73 @@ class AdminEmployeeTransactionCorrectionTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertFalse(TshirtAllocation.objects.filter(pk=self.tshirt_allocation.pk).exists())
 
+    def test_employee_history_shows_individual_and_bulk_controls_for_admin(self):
+        self.client.force_login(self.admin)
+        response = self.client.get(reverse("inventory:employee_history", args=[self.employee_a.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Edit Book Entry")
+        self.assertContains(response, "Delete Book Entry")
+        self.assertContains(response, "Delete Selected Book Entries")
+        self.assertContains(response, "Edit T-shirt Entry")
+        self.assertContains(response, "Delete T-shirt Entry")
+        self.assertContains(response, "Delete Selected T-shirt Entries")
+
+    def test_admin_can_bulk_delete_selected_book_entries_without_deleting_employee(self):
+        second_book = Book.objects.create(
+            asset_id="TRXBOOK2",
+            name="Transaction Book 2",
+            condition=Book.Condition.GOOD,
+            status=Book.Status.ALLOCATED,
+            created_by=self.admin,
+        )
+        second_allocation = BookAllocation.objects.create(
+            book=second_book,
+            employee_record=self.employee_a,
+            allocated_by=self.admin,
+            allocated_at=timezone.now(),
+            is_active=True,
+        )
+        self.client.force_login(self.admin)
+        response = self.client.post(
+            reverse("inventory:employee_book_transactions_bulk_delete", args=[self.employee_a.pk]),
+            {"book_transaction_ids": [str(self.book_allocation.pk), str(second_allocation.pk)]},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(BookAllocation.objects.filter(pk__in=[self.book_allocation.pk, second_allocation.pk]).exists())
+        self.assertTrue(Employee.objects.filter(pk=self.employee_a.pk).exists())
+        self.book.refresh_from_db()
+        second_book.refresh_from_db()
+        self.assertEqual(self.book.status, Book.Status.IN_LIBRARY)
+        self.assertEqual(second_book.status, Book.Status.IN_LIBRARY)
+
+    def test_admin_can_bulk_delete_selected_tshirt_entries_and_restore_stock(self):
+        second_allocation = TshirtAllocation.objects.create(
+            employee_record=self.employee_a,
+            stock=self.stock_b,
+            quantity=3,
+            issue_type=TshirtAllocation.IssueType.FREE,
+            status=TshirtAllocation.Status.ISSUED,
+            requested_by=self.admin,
+            requested_at=timezone.now(),
+            issued_by=self.admin,
+            issued_at=timezone.now(),
+        )
+        self.stock_b.available_quantity -= 3
+        self.stock_b.allocated_quantity += 3
+        self.stock_b.save(update_fields=["available_quantity", "allocated_quantity", "updated_at"])
+
+        self.client.force_login(self.admin)
+        response = self.client.post(
+            reverse("inventory:employee_tshirt_transactions_bulk_delete", args=[self.employee_a.pk]),
+            {"tshirt_transaction_ids": [str(self.tshirt_allocation.pk), str(second_allocation.pk)]},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(TshirtAllocation.objects.filter(pk__in=[self.tshirt_allocation.pk, second_allocation.pk]).exists())
+        self.assertTrue(Employee.objects.filter(pk=self.employee_a.pk).exists())
+        self.stock_a.refresh_from_db()
+        self.stock_b.refresh_from_db()
+        self.assertEqual(self.stock_a.available_quantity, 10)
+        self.assertEqual(self.stock_a.allocated_quantity, 0)
+        self.assertEqual(self.stock_b.available_quantity, 20)
+        self.assertEqual(self.stock_b.allocated_quantity, 0)
+
